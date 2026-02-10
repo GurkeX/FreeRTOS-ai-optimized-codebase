@@ -13,11 +13,13 @@
  *   5. Parse JSON → populate in-RAM config struct
  */
 
+#include "pico/stdlib.h"    /* Platform setup — must be first */
 #include "fs_manager.h"
 #include "fs_config.h"
 #include "lfs.h"
 #include "cJSON.h"
 #include <stdio.h>
+#include <stdlib.h>  /* malloc, free */
 #include <string.h>
 
 /* =========================================================================

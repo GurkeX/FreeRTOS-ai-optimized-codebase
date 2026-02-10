@@ -20,6 +20,7 @@
 #include "pico/stdlib.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>  /* uintptr_t */
 
 /* =========================================================================
  * XIP Base Address
@@ -79,8 +80,8 @@ static void _flash_erase_callback(void *param) {
 static int _lfs_read(const struct lfs_config *c, lfs_block_t block,
                      lfs_off_t off, void *buffer, lfs_size_t size) {
     (void)c;
-    uint32_t addr = XIP_BASE_ADDR + FS_FLASH_OFFSET +
-                    (block * FS_BLOCK_SIZE) + off;
+    uintptr_t addr = XIP_BASE_ADDR + FS_FLASH_OFFSET +
+                     (block * FS_BLOCK_SIZE) + off;
     memcpy(buffer, (const void *)addr, size);
     return LFS_ERR_OK;
 }
@@ -159,8 +160,12 @@ static uint8_t s_lookahead_buf[FS_LOOKAHEAD_SIZE];
 /** LittleFS filesystem instance (used by fs_manager.c). */
 lfs_t g_lfs;
 
-/** LittleFS configuration (used by fs_manager.c for mount/format). */
+/** LittleFS configuration (used by fs_manager.c for mount/format).
+ *  Fields ordered to match struct lfs_config declaration in lfs.h. */
 const struct lfs_config g_lfs_config = {
+    /* Opaque user context (unused — we use static state) */
+    .context = NULL,
+
     /* HAL callbacks */
     .read  = _lfs_read,
     .prog  = _lfs_prog,
@@ -174,14 +179,24 @@ const struct lfs_config g_lfs_config = {
     .block_count    = FS_BLOCK_COUNT,
     .block_cycles   = FS_BLOCK_CYCLES,
 
+    /* Cache size — must come before lookahead per struct order */
+    .cache_size     = FS_CACHE_SIZE,
+
     /* Lookahead — for block allocation wear leveling */
     .lookahead_size = FS_LOOKAHEAD_SIZE,
+
+    /* Metadata compaction threshold — 0 = default (~88% block_size) */
+    .compact_thresh = 0,
 
     /* Static buffers (avoids malloc) */
     .read_buffer      = s_read_buf,
     .prog_buffer      = s_prog_buf,
     .lookahead_buffer = s_lookahead_buf,
 
-    /* Cache size */
-    .cache_size = FS_CACHE_SIZE,
+    /* Optional limits — 0 = use LittleFS defaults */
+    .name_max     = 0,
+    .file_max     = 0,
+    .attr_max     = 0,
+    .metadata_max = 0,
+    .inline_max   = 0,
 };
