@@ -47,3 +47,20 @@
 - All tools produce structured JSON with `--json` flag; `--help` and `--verbose` on every script
 - `CMAKE_EXPORT_COMPILE_COMMANDS ON` for IDE IntelliSense / compile_commands.json
 - Key files: `tools/hil/openocd_utils.py`, `tools/hil/flash.py`, `tools/hil/ahi_tool.py`, `tools/hil/run_hw_test.py`, `tools/docker/docker-compose.yml`
+
+---
+
+### PIV-005: BB4 — Data Persistence & Telemetry (PLANNED)
+
+**Planned Features:**
+- LittleFS filesystem on RP2040 flash (last 256KB at offset 0x1C0000) with SMP-safe flash HAL via `flash_safe_op()`
+- cJSON-based config manager: `/config/app.json` with `app_config_t` struct (blink_delay, log_level, telemetry_interval, watchdog_timeout)
+- Auto-format on first boot, graceful fallback to defaults on corrupt config
+- RTT Channel 2 ("Vitals") binary telemetry: 500ms health sampling via supervisor FreeRTOS task
+- Fixed-width LE binary packet encoding: heap usage, min-ever heap, per-task stack watermarks, CPU%, task states
+- Host-side `telemetry_manager.py` with tiered analytics (raw JSONL, 5-min summary, threshold alerts)
+- `config_sync.py` documented stub (GDB-based hot-swap deferred)
+- Docker compose + OpenOCD updates for RTT Channel 2 (TCP port 9092)
+- Watchdog feed before flash operations, LFS_NO_MALLOC + LFS_THREADSAFE
+- 25 tasks across 8 phases (A–H), 3 USER GATEs, estimated complexity: High
+- Key files: `firmware/components/persistence/`, `firmware/components/telemetry/`, `tools/telemetry/telemetry_manager.py`
