@@ -14,6 +14,9 @@ target_link_libraries(firmware
     firmware_core        # Header-only: FreeRTOSConfig.h location
     firmware_core_impl   # Static: system_init, gpio, flash, watchdog
 
+    # BB2: Tokenized logging
+    firmware_logging
+
     # FreeRTOS
     FreeRTOS-Kernel-Heap4
 
@@ -22,9 +25,10 @@ target_link_libraries(firmware
     pico_cyw43_arch_none  # CYW43 driver for LED, no WiFi stack yet
 )
 
-# Select stdio output — UART for now (most universally available)
-pico_enable_stdio_uart(firmware 1)
-pico_enable_stdio_usb(firmware 0)
+# Select stdio outputs
+pico_enable_stdio_uart(firmware 1)   # UART: boot messages, fallback
+pico_enable_stdio_usb(firmware 0)    # USB: disabled
+pico_enable_stdio_rtt(firmware 1)    # RTT: Channel 0 text + Channel 1 binary (BB2)
 
 # Generate UF2 file for drag-and-drop flashing (in addition to .elf)
 pico_add_extra_outputs(firmware)

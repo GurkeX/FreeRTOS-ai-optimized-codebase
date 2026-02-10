@@ -25,4 +25,30 @@
 
 ---
 
-### PIV-003: TBD — PLANNED
+### PIV-003: BB2 — Tokenized Logging Subsystem
+
+**Implemented Features:**
+- SEGGER RTT Channel 1 binary tokenized logging with FNV-1a runtime hashing + ZigZag varint encoding
+- SMP-safe packet writer using FreeRTOS critical sections (RP2040 hardware spin locks)
+- Public API: LOG_ERROR/WARN/INFO/DEBUG macros with compile-time level filtering and `_S` zero-arg variants
+- Pre-build gen_tokens.py: source scanner → token_database.csv + tokens_generated.h (BUILD_ID=0xd6cf5c3f)
+- Host-side log_decoder.py: OpenOCD RTT TCP → binary decode → structured JSON lines output
+- OpenOCD config files for Pico Probe RTT channel exposure (TCP ports 9090/9091)
+- Fixed plan bugs: inverted log level comparison (`>=` → `<=`), Ninja dependency cycle (custom_command → custom_target)
+- Key files: `firmware/components/logging/`, `tools/logging/gen_tokens.py`, `tools/logging/log_decoder.py`
+---
+
+### PIV-004: BB3 — HIL (Hardware-in-the-Loop) Scripts ⏳ PLANNED
+
+**Planned Features:**
+- OpenOCD utility layer: path auto-discovery (host `~/.pico-sdk/` + Docker `/opt/openocd/`), process management, TCL RPC client (port 6666, `\x1a` terminator protocol)
+- Probe connectivity smoke test (`probe_check.py`): USB → Debug Probe → SWD → RP2040 → JSON
+- SWD flash pipeline (`flash.py`): OpenOCD `program + verify + reset` → JSON status, timeout protection, error classification
+- Agent-Hardware Interface (`ahi_tool.py`): register peek/poke via TCL RPC, GPIO state reads, memory inspection → JSON
+- GDB/pygdbmi test runner (`run_hw_test.py`): breakpoint-driven test execution, symbol-aware memory reads → JSON report
+- End-to-end pipeline (`run_pipeline.py`): Docker build → SWD flash → RTT capture → decode → aggregate JSON
+- Docker compose enhancements: `hil` service (persistent OpenOCD server), robust USB passthrough (cgroup rules + bind mount for hot-plug resilience)
+- `CMAKE_EXPORT_COMPILE_COMMANDS ON` for IDE IntelliSense / compile_commands.json
+- 5 USER GATEs for incremental hardware validation (probe → flash → register → GDB → pipeline)
+- Manual prerequisites: udev rules, libhidapi, gdb-multiarch (documented in plan)
+- Key files: `tools/hil/openocd_utils.py`, `tools/hil/flash.py`, `tools/hil/ahi_tool.py`, `tools/hil/run_hw_test.py`, `tools/hil/run_pipeline.py`, `tools/docker/docker-compose.yml`

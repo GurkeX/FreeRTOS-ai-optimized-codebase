@@ -1,0 +1,6 @@
+# BB2: Tokenized Logging Host Tools
+# gen_tokens.py: No external deps (stdlib only)
+# log_decoder.py: No external deps (stdlib only — uses socket, struct, csv, json)
+#
+# Optional: pyelftools for ELF section extraction (future enhancement)
+# pyelftools>=0.29

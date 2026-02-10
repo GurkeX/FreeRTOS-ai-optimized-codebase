@@ -13,6 +13,8 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"  /* Pico W onboard LED is on CYW43 */
 
+#include "ai_log.h"           /* BB2: Tokenized logging */
+
 // Pico W: The onboard LED is connected to the CYW43 WiFi chip,
 // NOT to a regular GPIO pin. Must use cyw43_arch_gpio_put().
 // CYW43_WL_GPIO_LED_PIN is defined by the SDK for the Pico W.
@@ -37,6 +39,8 @@ static void blinky_task(void *params) {
     for (;;) {
         led_state = !led_state;
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state);
+        LOG_INFO("LED toggled, state=%d, core=%d",
+                 AI_LOG_ARG_I(led_state), AI_LOG_ARG_U(get_core_num()));
         vTaskDelay(pdMS_TO_TICKS(BLINKY_DELAY_MS));
     }
 }
@@ -45,7 +49,13 @@ int main(void) {
     // Phase 1: System hardware initialization
     system_init();
 
+    // Phase 1.5: Initialize tokenized logging subsystem (RTT Channel 1)
+    ai_log_init();
+
     printf("=== AI-Optimized FreeRTOS v0.1.0 ===\n");
+
+    // Send BUILD_ID handshake (first log message — required by arch spec)
+    LOG_INFO("BUILD_ID: %x", AI_LOG_ARG_U(AI_LOG_BUILD_ID));
     printf("[main] Creating blinky task...\n");
 
     // Phase 2: Create initial tasks
