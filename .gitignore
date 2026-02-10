@@ -1,0 +1,51 @@
+# =============================================================================
+# AI-Optimized FreeRTOS Codebase — .gitignore
+# =============================================================================
+
+# Build artifacts
+build/
+*.elf
+*.uf2
+*.bin
+*.hex
+*.map
+*.dis
+*.o
+*.d
+*.a
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/mcp.json
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated (BB2 — tokenized logging)
+firmware/components/logging/include/tokens_generated.h
+tools/logging/token_database.csv
+
+# Telemetry data
+*.jsonl
+telemetry_raw.jsonl
+
+# Docker
+.docker/
