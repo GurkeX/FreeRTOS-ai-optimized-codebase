@@ -14,6 +14,8 @@
 #include "pico/cyw43_arch.h"  /* Pico W onboard LED is on CYW43 */
 
 #include "ai_log.h"           /* BB2: Tokenized logging */
+#include "fs_manager.h"       /* BB4: Persistent configuration */
+#include "telemetry.h"        /* BB4: RTT telemetry vitals */
 
 // Pico W: The onboard LED is connected to the CYW43 WiFi chip,
 // NOT to a regular GPIO pin. Must use cyw43_arch_gpio_put().
@@ -34,14 +36,18 @@ static void blinky_task(void *params) {
         return;
     }
 
-    printf("[blinky] Task started on core %u\n", get_core_num());
+    // BB4: Read blink delay from persistent config
+    const app_config_t *cfg = fs_manager_get_config();
+
+    printf("[blinky] Task started on core %u, delay=%lums\n",
+           get_core_num(), (unsigned long)cfg->blink_delay_ms);
 
     for (;;) {
         led_state = !led_state;
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state);
         LOG_INFO("LED toggled, state=%d, core=%d",
                  AI_LOG_ARG_I(led_state), AI_LOG_ARG_U(get_core_num()));
-        vTaskDelay(pdMS_TO_TICKS(BLINKY_DELAY_MS));
+        vTaskDelay(pdMS_TO_TICKS(cfg->blink_delay_ms));
     }
 }
 
@@ -52,7 +58,15 @@ int main(void) {
     // Phase 1.5: Initialize tokenized logging subsystem (RTT Channel 1)
     ai_log_init();
 
-    printf("=== AI-Optimized FreeRTOS v0.1.0 ===\n");
+    // Phase 1.6: BB4 — Initialize persistent configuration (LittleFS)
+    if (!fs_manager_init()) {
+        printf("[main] WARNING: Persistence init failed, using defaults\n");
+    }
+
+    // Phase 1.7: BB4 — Initialize telemetry subsystem (RTT Channel 2)
+    telemetry_init();
+
+    printf("=== AI-Optimized FreeRTOS v0.2.0 ===\n");
 
     // Send BUILD_ID handshake (first log message — required by arch spec)
     LOG_INFO("BUILD_ID: %x", AI_LOG_ARG_U(AI_LOG_BUILD_ID));
@@ -67,6 +81,12 @@ int main(void) {
         BLINKY_PRIORITY,
         NULL
     );
+
+    // Phase 2.5: BB4 — Start telemetry supervisor task (500ms vitals)
+    const app_config_t *cfg = fs_manager_get_config();
+    if (!telemetry_start_supervisor(cfg->telemetry_interval_ms)) {
+        printf("[main] WARNING: Supervisor task creation failed\n");
+    }
 
     // Phase 3: Start scheduler (never returns)
     // On RP2040 SMP, this also launches Core 1.

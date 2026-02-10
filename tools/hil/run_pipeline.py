@@ -248,6 +248,7 @@ def stage_rtt_capture(project_root: str, duration_secs: int = 5,
                     "rtt start",
                     "rtt server start 9090 0",
                     "rtt server start 9091 1",
+                    "rtt server start 9092 2",
                 ],
             )
 

@@ -17,6 +17,10 @@ target_link_libraries(firmware
     # BB2: Tokenized logging
     firmware_logging
 
+    # BB4: Data Persistence & Telemetry
+    firmware_persistence # LittleFS + cJSON config storage
+    firmware_telemetry   # RTT Channel 2 vitals stream
+
     # FreeRTOS
     FreeRTOS-Kernel-Heap4
 

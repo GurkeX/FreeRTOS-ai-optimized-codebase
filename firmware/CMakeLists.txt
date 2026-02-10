@@ -9,6 +9,6 @@ add_subdirectory(app)
 
 # Component subdirectories:
 add_subdirectory(components/logging)      # BB2
-# add_subdirectory(components/telemetry)    # BB4
+add_subdirectory(components/telemetry)    # BB4
 # add_subdirectory(components/health)       # BB5
-# add_subdirectory(components/persistence)  # BB4
+add_subdirectory(components/persistence)  # BB4

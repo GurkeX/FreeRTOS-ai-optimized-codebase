@@ -1,0 +1,13 @@
+# BB4 Telemetry Tools — Python Dependencies
+#
+# All tools use Python 3.8+ standard library only (no external packages).
+# This file is included for documentation and future extensibility.
+#
+# Current dependencies: None (stdlib only)
+#   - socket: RTT TCP connection
+#   - struct: Binary packet decoding
+#   - json:   JSON serialization
+#   - argparse: CLI argument parsing
+#
+# Future dependencies (for config_sync.py Phase 2):
+#   pygdbmi>=0.11    # GDB Machine Interface client

@@ -79,7 +79,8 @@ services:
       - "4444:4444"   # Telnet
       - "6666:6666"   # TCL RPC
       - "9090:9090"   # RTT Channel 0 (text)
-      - "9091:9091"   # RTT Channel 1 (binary logs)
+      - "9091:9091"   # RTT Channel 1 (binary logs — BB2)
+      - "9092:9092"   # RTT Channel 2 (binary telemetry — BB4)
     command: >
       openocd -f tools/hil/openocd/pico-probe.cfg
               -f tools/hil/openocd/rtt.cfg

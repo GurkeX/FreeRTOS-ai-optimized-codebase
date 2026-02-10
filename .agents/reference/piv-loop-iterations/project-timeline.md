@@ -50,6 +50,18 @@
 
 ---
 
+### PIV-005: BB4 — Data Persistence & Telemetry
+
+**Implemented Features:**
+- LittleFS persistent config storage (64KB flash partition) with cJSON serialization — survives power loss/reboots
+- RTT Channel 2 binary telemetry: supervisor task samples FreeRTOS heap, stack watermarks, per-task CPU% every 500ms
+- Host-side telemetry_manager.py with three-tier analytics (passive raw logging, 5-min summaries, threshold alerts)
+- SMP-safe flash HAL port for LittleFS using flash_safe_op() + preemptive watchdog feed before flash operations
+- config_sync.py documented stub for future GDB-based hot config swap without reflash
+- Key files: `firmware/components/persistence/`, `firmware/components/telemetry/`, `tools/telemetry/telemetry_manager.py`
+
+---
+
 ### PIV-005: BB4 — Data Persistence & Telemetry (PLANNED)
 
 **Planned Features:**
