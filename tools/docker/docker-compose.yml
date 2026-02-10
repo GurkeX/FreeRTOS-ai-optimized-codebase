@@ -1,0 +1,57 @@
+# =============================================================================
+# AI-Optimized FreeRTOS — Docker Compose Configuration
+# =============================================================================
+# Services:
+#   build  — Compile firmware inside hermetic environment
+#   flash  — Build + flash via SWD probe (requires USB passthrough)
+# =============================================================================
+
+services:
+  build:
+    image: ai-freertos-build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount project source (read-write)
+      - ../../:/workspace
+      # Named volume for build cache (persists between runs)
+      - build-cache:/workspace/build
+    environment:
+      - PICO_SDK_PATH=/workspace/lib/pico-sdk
+      - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
+    working_dir: /workspace
+    command: >
+      bash -c "
+        mkdir -p build && cd build &&
+        cmake .. -G Ninja &&
+        ninja
+      "
+
+  flash:
+    image: ai-freertos-build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../../:/workspace
+      - build-cache:/workspace/build
+    environment:
+      - PICO_SDK_PATH=/workspace/lib/pico-sdk
+      - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
+    working_dir: /workspace
+    # USB passthrough for SWD probe access (Linux)
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    command: >
+      bash -c "
+        mkdir -p build && cd build &&
+        cmake .. -G Ninja &&
+        ninja &&
+        openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
+          -c 'adapter speed 5000' \
+          -c 'program build/firmware/app/firmware.elf verify reset exit'
+      "
+
+volumes:
+  build-cache:

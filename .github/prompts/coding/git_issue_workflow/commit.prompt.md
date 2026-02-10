@@ -1,5 +1,5 @@
 ---
-description: Create git commit with conventional message format
+description: Create git issue fix commit with conventional message format
 argument-hint: [file1] [file2] ... (optional - commits all changes if not specified)
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
 ---

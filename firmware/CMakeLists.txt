@@ -1,15 +1,14 @@
 # firmware/CMakeLists.txt
 # AI-Optimized FreeRTOS Firmware Build Configuration
-#
-# This file will be expanded as components are implemented.
-# Current state: Skeleton only — no build targets.
-#
-# Future subdirectories:
-#   add_subdirectory(core)
-#   add_subdirectory(components/logging)
-#   add_subdirectory(components/telemetry)
-#   add_subdirectory(components/health)
-#   add_subdirectory(components/persistence)
-#   add_subdirectory(app)
 
-message(STATUS "Firmware CMakeLists.txt loaded — no targets defined yet.")
+# Core infrastructure (HAL wrappers, FreeRTOSConfig.h, system_init)
+add_subdirectory(core)
+
+# Application entry point (main.c, blinky task)
+add_subdirectory(app)
+
+# Future component subdirectories (uncomment when implemented):
+# add_subdirectory(components/logging)      # BB2
+# add_subdirectory(components/telemetry)    # BB4
+# add_subdirectory(components/health)       # BB5
+# add_subdirectory(components/persistence)  # BB4

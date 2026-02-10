@@ -15,6 +15,9 @@ cmake_minimum_required(VERSION 3.13)
 set(PICO_SDK_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/pico-sdk)
 set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/FreeRTOS-Kernel)
 
+# Target the Raspberry Pi Pico W (enables CYW43 WiFi chip)
+set(PICO_BOARD pico_w)
+
 # Include the Pico SDK CMake initialization
 include(${PICO_SDK_PATH}/pico_sdk_init.cmake)
 
@@ -26,10 +29,13 @@ set(CMAKE_CXX_STANDARD 17)
 # Initialize the Pico SDK
 pico_sdk_init()
 
-# Include the FreeRTOS Kernel import (provides FreeRTOS::Heap4 etc.)
-# NOTE: The Community-Supported-Ports submodule must be initialized before building.
-# This is handled by the Docker environment (tools/docker/).
-include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/Community-Supported-Ports/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
+# Tell FreeRTOS where to find FreeRTOSConfig.h
+set(FREERTOS_CONFIG_FILE_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/firmware/core CACHE STRING "")
+
+# Include the FreeRTOS Kernel import (provides FreeRTOS-Kernel-Heap4 etc.)
+# Uses the ThirdParty/GCC/RP2040 path which is always present in the kernel tree.
+# The import script auto-detects the RP2040 port based on PICO_PLATFORM.
+include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
 
 # Add firmware subdirectory
 add_subdirectory(firmware)
