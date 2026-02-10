@@ -62,17 +62,20 @@
 
 ---
 
-### PIV-005: BB4 — Data Persistence & Telemetry (PLANNED)
+### PIV-006: BB5 — Health & Observability (PLANNED)
 
 **Planned Features:**
-- LittleFS filesystem on RP2040 flash (last 256KB at offset 0x1C0000) with SMP-safe flash HAL via `flash_safe_op()`
-- cJSON-based config manager: `/config/app.json` with `app_config_t` struct (blink_delay, log_level, telemetry_interval, watchdog_timeout)
-- Auto-format on first boot, graceful fallback to defaults on corrupt config
-- RTT Channel 2 ("Vitals") binary telemetry: 500ms health sampling via supervisor FreeRTOS task
-- Fixed-width LE binary packet encoding: heap usage, min-ever heap, per-task stack watermarks, CPU%, task states
-- Host-side `telemetry_manager.py` with tiered analytics (raw JSONL, 5-min summary, threshold alerts)
-- `config_sync.py` documented stub (GDB-based hot-swap deferred)
-- Docker compose + OpenOCD updates for RTT Channel 2 (TCP port 9092)
-- Watchdog feed before flash operations, LFS_NO_MALLOC + LFS_THREADSAFE
-- 25 tasks across 8 phases (A–H), 3 USER GATEs, estimated complexity: High
-- Key files: `firmware/components/persistence/`, `firmware/components/telemetry/`, `tools/telemetry/telemetry_manager.py`
+- Cooperative Watchdog System: FreeRTOS Event Group-based liveness proof (24 usable bits, 5s check cadence)
+- High-priority monitor task (`configMAX_PRIORITIES-1`) feeds RP2040 HW watchdog (8s timeout) on successful check-in
+- Guilty task identification: on timeout, extract missing bits → identify which task hung
+- HardFault handler: Thumb-1 ASM stub (`.S` file) in `.time_critical` SRAM section → C crash data extraction
+- Crash data persistence: PC, LR, xPSR, core_id, task_number → `watchdog_hw->scratch[0-3]` → survives reboot
+- Crash reporter: post-boot scratch register read → JSON crash report → printf to RTT + `/crash/latest.json` in LittleFS
+- Enhanced `vApplicationStackOverflowHook` and `vApplicationMallocFailedHook` with structured crash data + watchdog reboot
+- Deferred HW watchdog enable: monitor task enables HW WDT on first iteration (avoids pre-scheduler race)
+- Host-side `crash_decoder.py`: parse crash JSON + `arm-none-eabi-addr2line` resolution to source:line
+- Host-side `health_dashboard.py`: telemetry JSONL analysis → per-task CPU% trends, stack HWM trends, heap leak detection
+- 4 distinct crash magic values: `0xDEADFA11` (HardFault), `0xDEAD57AC` (stack overflow), `0xDEADBAD0` (malloc fail), `0xDEADB10C` (watchdog timeout)
+- No new RTT channels, no FreeRTOSConfig.h changes, no Docker infrastructure changes needed
+- 23 tasks across 8 phases (A–H), 2 USER GATEs (3 sub-gates), estimated complexity: High
+- Key files: `firmware/components/health/`, `tools/health/crash_decoder.py`, `tools/health/health_dashboard.py`
