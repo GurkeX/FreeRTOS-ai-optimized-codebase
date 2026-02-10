@@ -1,0 +1,7 @@
+# BB3: HIL (Hardware-in-the-Loop) Python Tools
+#
+# Core tools (flash.py, ahi_tool.py, probe_check.py, openocd_utils.py):
+#   No external dependencies — stdlib only (socket, subprocess, argparse, json)
+#
+# GDB test runner (run_hw_test.py):
+pygdbmi>=0.11.0.0

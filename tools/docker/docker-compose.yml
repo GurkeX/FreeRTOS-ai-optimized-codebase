@@ -36,13 +36,17 @@ services:
     volumes:
       - ../../:/workspace
       - build-cache:/workspace/build
+      # Bind mount (sees new devices after hot-plug)
+      - /dev/bus/usb:/dev/bus/usb
+      # udev metadata for libusb device discovery
+      - /run/udev:/run/udev:ro
+    # Robust USB passthrough: cgroup rule for USB device major number
+    device_cgroup_rules:
+      - 'c 189:* rmw'
     environment:
       - PICO_SDK_PATH=/workspace/lib/pico-sdk
       - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
     working_dir: /workspace
-    # USB passthrough for SWD probe access (Linux)
-    devices:
-      - /dev/bus/usb:/dev/bus/usb
     command: >
       bash -c "
         mkdir -p build && cd build &&
@@ -52,6 +56,34 @@ services:
           -c 'adapter speed 5000' \
           -c 'program build/firmware/app/firmware.elf verify reset exit'
       "
+
+  # Persistent OpenOCD server for ahi_tool.py, run_hw_test.py, and RTT
+  hil:
+    image: ai-freertos-build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../../:/workspace
+      - build-cache:/workspace/build
+      - /dev/bus/usb:/dev/bus/usb
+      - /run/udev:/run/udev:ro
+    device_cgroup_rules:
+      - 'c 189:* rmw'
+    environment:
+      - PICO_SDK_PATH=/workspace/lib/pico-sdk
+      - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
+    working_dir: /workspace
+    ports:
+      - "3333:3333"   # GDB server
+      - "4444:4444"   # Telnet
+      - "6666:6666"   # TCL RPC
+      - "9090:9090"   # RTT Channel 0 (text)
+      - "9091:9091"   # RTT Channel 1 (binary logs)
+    command: >
+      openocd -f tools/hil/openocd/pico-probe.cfg
+              -f tools/hil/openocd/rtt.cfg
+              -c "bindto 0.0.0.0"
 
 volumes:
   build-cache:
