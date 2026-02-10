@@ -283,7 +283,7 @@ Verify that the full directory skeleton, git submodules, CMake build files, and 
 
 **Total Tests**: 13  
 **Passed**: __  
-**Failed**: __  
+**Failed**:__  
 **Pass Rate**: ___%
 
 ---
