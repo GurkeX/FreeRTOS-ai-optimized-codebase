@@ -21,6 +21,7 @@
  */
 
 #include "telemetry.h"
+#include "watchdog_manager.h"  /* BB5: Cooperative watchdog check-in */
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
@@ -143,6 +144,9 @@ static void _supervisor_task(void *params) {
     uint32_t interval_ms = *(uint32_t *)params;
     if (interval_ms == 0) interval_ms = DEFAULT_INTERVAL_MS;
 
+    // BB5: Assign task number for crash identification
+    vTaskSetTaskNumber(xTaskGetCurrentTaskHandle(), 2);
+
     printf("[supervisor] Started, interval=%lums, max_tasks=%d\n",
            (unsigned long)interval_ms, SUPERVISOR_MAX_TASKS);
 
@@ -154,6 +158,10 @@ static void _supervisor_task(void *params) {
 
     for (;;) {
         _send_vitals_packet();
+
+        // BB5: Prove liveness to cooperative watchdog
+        watchdog_manager_checkin(WDG_BIT_SUPERVISOR);
+
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(interval_ms));
     }
 }

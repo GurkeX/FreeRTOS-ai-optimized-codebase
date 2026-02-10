@@ -8,6 +8,7 @@ add_library(firmware_telemetry STATIC
 
 target_include_directories(firmware_telemetry PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
+    ${CMAKE_SOURCE_DIR}/firmware/components/health/include
 )
 
 # Link dependencies:

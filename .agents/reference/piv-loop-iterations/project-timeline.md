@@ -62,20 +62,13 @@
 
 ---
 
-### PIV-006: BB5 — Health & Observability (PLANNED)
+### PIV-006: BB5 — Health & Observability
 
-**Planned Features:**
-- Cooperative Watchdog System: FreeRTOS Event Group-based liveness proof (24 usable bits, 5s check cadence)
-- High-priority monitor task (`configMAX_PRIORITIES-1`) feeds RP2040 HW watchdog (8s timeout) on successful check-in
-- Guilty task identification: on timeout, extract missing bits → identify which task hung
-- HardFault handler: Thumb-1 ASM stub (`.S` file) in `.time_critical` SRAM section → C crash data extraction
-- Crash data persistence: PC, LR, xPSR, core_id, task_number → `watchdog_hw->scratch[0-3]` → survives reboot
-- Crash reporter: post-boot scratch register read → JSON crash report → printf to RTT + `/crash/latest.json` in LittleFS
-- Enhanced `vApplicationStackOverflowHook` and `vApplicationMallocFailedHook` with structured crash data + watchdog reboot
-- Deferred HW watchdog enable: monitor task enables HW WDT on first iteration (avoids pre-scheduler race)
-- Host-side `crash_decoder.py`: parse crash JSON + `arm-none-eabi-addr2line` resolution to source:line
-- Host-side `health_dashboard.py`: telemetry JSONL analysis → per-task CPU% trends, stack HWM trends, heap leak detection
-- 4 distinct crash magic values: `0xDEADFA11` (HardFault), `0xDEAD57AC` (stack overflow), `0xDEADBAD0` (malloc fail), `0xDEADB10C` (watchdog timeout)
-- No new RTT channels, no FreeRTOSConfig.h changes, no Docker infrastructure changes needed
-- 23 tasks across 8 phases (A–H), 2 USER GATEs (3 sub-gates), estimated complexity: High
+**Implemented Features:**
+- Cooperative Watchdog System: Event Group-based liveness proof with 5s cadence, 8s HW WDT, guilty-task identification
+- HardFault Handler: Thumb-1 ASM stub + C crash extraction in SRAM, crash data to watchdog scratch[0-3] surviving reboot
+- Crash Reporter: post-boot scratch decode → formatted RTT report + `/crash/latest.json` LittleFS persistence
+- Enhanced FreeRTOS hooks (stack overflow, malloc fail) with structured crash data + watchdog reboot
+- Host-side `crash_decoder.py` (addr2line resolution) and `health_dashboard.py` (telemetry trend analysis)
+- Version updated to v0.3.0; blinky + supervisor tasks registered with cooperative watchdog
 - Key files: `firmware/components/health/`, `tools/health/crash_decoder.py`, `tools/health/health_dashboard.py`

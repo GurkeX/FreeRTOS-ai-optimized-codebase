@@ -3,6 +3,9 @@
 
 add_executable(firmware
     main.c
+    # BB5: HardFault handler ASM — must be in the executable (not a static lib)
+    # so the strong isr_hardfault symbol overrides the weak CRT0 default.
+    ../components/health/src/crash_handler_asm.S
 )
 
 target_include_directories(firmware PRIVATE
@@ -20,6 +23,9 @@ target_link_libraries(firmware
     # BB4: Data Persistence & Telemetry
     firmware_persistence # LittleFS + cJSON config storage
     firmware_telemetry   # RTT Channel 2 vitals stream
+
+    # BB5: Health & Observability
+    firmware_health      # Crash handler + cooperative watchdog
 
     # FreeRTOS
     FreeRTOS-Kernel-Heap4

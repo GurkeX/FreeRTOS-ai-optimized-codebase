@@ -16,6 +16,11 @@
 #include "ai_log.h"           /* BB2: Tokenized logging */
 #include "fs_manager.h"       /* BB4: Persistent configuration */
 #include "telemetry.h"        /* BB4: RTT telemetry vitals */
+#include "crash_handler.h"    /* BB5: Crash reporter */
+#include "watchdog_manager.h" /* BB5: Cooperative watchdog */
+
+#include "hardware/watchdog.h"      /* BB5: Direct scratch access in hooks */
+#include "hardware/structs/sio.h"   /* BB5: sio_hw->cpuid in hooks */
 
 // Pico W: The onboard LED is connected to the CYW43 WiFi chip,
 // NOT to a regular GPIO pin. Must use cyw43_arch_gpio_put().
@@ -28,6 +33,9 @@
 static void blinky_task(void *params) {
     (void)params;
     bool led_state = false;
+
+    // BB5: Assign task number for crash identification
+    vTaskSetTaskNumber(xTaskGetCurrentTaskHandle(), 1);
 
     // Initialize CYW43 for LED access on Pico W
     if (cyw43_arch_init()) {
@@ -47,6 +55,10 @@ static void blinky_task(void *params) {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state);
         LOG_INFO("LED toggled, state=%d, core=%d",
                  AI_LOG_ARG_I(led_state), AI_LOG_ARG_U(get_core_num()));
+
+        // BB5: Prove liveness to cooperative watchdog
+        watchdog_manager_checkin(WDG_BIT_BLINKY);
+
         vTaskDelay(pdMS_TO_TICKS(cfg->blink_delay_ms));
     }
 }
@@ -63,10 +75,18 @@ int main(void) {
         printf("[main] WARNING: Persistence init failed, using defaults\n");
     }
 
+    // Phase 1.65: BB5 — Check for crash from previous boot
+    if (crash_reporter_init()) {
+        printf("[main] ⚠️ Crash from previous boot detected and reported\n");
+    }
+
     // Phase 1.7: BB4 — Initialize telemetry subsystem (RTT Channel 2)
     telemetry_init();
 
-    printf("=== AI-Optimized FreeRTOS v0.2.0 ===\n");
+    // Phase 1.8: BB5 — Initialize cooperative watchdog (Event Group created, HW WDT deferred)
+    watchdog_manager_init(8000);
+
+    printf("=== AI-Optimized FreeRTOS v0.3.0 ===\n");
 
     // Send BUILD_ID handshake (first log message — required by arch spec)
     LOG_INFO("BUILD_ID: %x", AI_LOG_ARG_U(AI_LOG_BUILD_ID));
@@ -88,6 +108,13 @@ int main(void) {
         printf("[main] WARNING: Supervisor task creation failed\n");
     }
 
+    // BB5: Register tasks with cooperative watchdog
+    watchdog_manager_register(WDG_BIT_BLINKY);
+    watchdog_manager_register(WDG_BIT_SUPERVISOR);
+
+    // Phase 2.8: BB5 — Start watchdog monitor task
+    watchdog_manager_start();
+
     // Phase 3: Start scheduler (never returns)
     // On RP2040 SMP, this also launches Core 1.
     printf("[main] Starting FreeRTOS scheduler (SMP, %d cores)\n",
@@ -102,20 +129,33 @@ int main(void) {
 }
 
 // FreeRTOS hook: called when malloc fails
+// BB5: Write structured diagnostic data to scratch registers and reboot
 void vApplicationMallocFailedHook(void) {
-    printf("[FATAL] FreeRTOS malloc failed!\n");
-    for (;;) {
-        tight_loop_contents();
-    }
+    uint32_t core_id = sio_hw->cpuid;
+    watchdog_hw->scratch[0] = 0xDEADBAD0u;  /* "dead bad alloc" magic */
+    watchdog_hw->scratch[1] = (uint32_t)xPortGetFreeHeapSize();
+    watchdog_hw->scratch[2] = 0;
+    watchdog_hw->scratch[3] = core_id << 12;
+
+    watchdog_reboot(0, 0, 0);
+    while (1) { __asm volatile("" ::: "memory"); }
 }
 
 // FreeRTOS hook: called on stack overflow (method 2)
+// BB5: Write structured crash data to scratch registers and reboot
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
-    (void)xTask;
-    printf("[FATAL] Stack overflow in task: %s\n", pcTaskName);
-    for (;;) {
-        tight_loop_contents();
-    }
+    (void)pcTaskName;
+    /* Write crash-like data to scratch registers */
+    uint32_t task_num = (uint32_t)uxTaskGetTaskNumber(xTask);
+    uint32_t core_id = sio_hw->cpuid;
+
+    watchdog_hw->scratch[0] = 0xDEAD57ACu;  /* "dead stack" magic */
+    watchdog_hw->scratch[1] = 0;             /* No PC available */
+    watchdog_hw->scratch[2] = 0;             /* No LR available */
+    watchdog_hw->scratch[3] = ((core_id & 0xFu) << 12) | (task_num & 0xFFFu);
+
+    watchdog_reboot(0, 0, 0);
+    while (1) { __asm volatile("" ::: "memory"); }
 }
 
 /* =========================================================================
