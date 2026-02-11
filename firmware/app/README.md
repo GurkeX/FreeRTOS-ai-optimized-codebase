@@ -129,13 +129,13 @@ static void my_task(void *params) {
 }
 ```
 
-2. **Add a watchdog bit** in `firmware/components/health/include/watchdog_manager.h`:
+1. **Add a watchdog bit** in `firmware/components/health/include/watchdog_manager.h`:
 
 ```c
 #define WDG_BIT_MY_TASK  (1 << 2)  // Next available bit
 ```
 
-3. **Create, register, and start** in `main()` — between Phase 2 and Phase 3:
+1. **Create, register, and start** in `main()` — between Phase 2 and Phase 3:
 
 ```c
 // In main(), after existing xTaskCreate calls:
@@ -145,13 +145,13 @@ xTaskCreate(my_task, "my_task", MY_TASK_STACK_SIZE, NULL, MY_TASK_PRIORITY, NULL
 watchdog_manager_register(WDG_BIT_MY_TASK);
 ```
 
-4. **Use tokenized logging** (not `printf`) inside task loops:
+1. **Use tokenized logging** (not `printf`) inside task loops:
 
 ```c
 LOG_INFO("My task running on core=%d", AI_LOG_ARG_U(get_core_num()));
 ```
 
-5. **Build and flash:**
+1. **Build and flash:**
 
 ```bash
 ~/.pico-sdk/ninja/v1.12.1/ninja -C build
