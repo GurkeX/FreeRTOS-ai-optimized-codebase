@@ -163,6 +163,411 @@ def find_openocd_scripts(openocd_path: str) -> str:
         "Set OPENOCD_SCRIPTS=/path/to/scripts to override."
     )
 
+def find_arm_toolchain(tool_name: str = "arm-none-eabi-addr2line") -> str:
+    """Find an ARM cross-toolchain binary.
+
+    Search order:
+        1. ARM_TOOLCHAIN_PATH environment variable + tool_name
+        2. shutil.which(tool_name) — system PATH (works inside Docker)
+        3. ~/.pico-sdk/toolchain/*/bin/tool_name — Pico VS Code extension
+        4. Raise FileNotFoundError with helpful message
+
+    Args:
+        tool_name: Binary name to find (default: arm-none-eabi-addr2line).
+
+    Returns:
+        Absolute path to the toolchain binary.
+    """
+    # 1. Environment variable override
+    env_path = os.environ.get("ARM_TOOLCHAIN_PATH")
+    if env_path:
+        candidate = os.path.join(env_path, tool_name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return os.path.abspath(candidate)
+
+    # 2. System PATH
+    which_path = shutil.which(tool_name)
+    if which_path:
+        return os.path.abspath(which_path)
+
+    # 3. Pico SDK extension (host): ~/.pico-sdk/toolchain/*/bin/
+    home = os.path.expanduser("~")
+    pattern = os.path.join(home, ".pico-sdk", "toolchain", "*", "bin", tool_name)
+    matches = sorted(glob.glob(pattern), reverse=True)
+    for match in matches:
+        if os.path.isfile(match) and os.access(match, os.X_OK):
+            return os.path.abspath(match)
+
+    raise FileNotFoundError(
+        f"Cannot find {tool_name}. Tried:\n"
+        f"  1. $ARM_TOOLCHAIN_PATH + {tool_name} (not set or invalid)\n"
+        f"  2. '{tool_name}' in system PATH (not found)\n"
+        f"  3. ~/.pico-sdk/toolchain/*/bin/{tool_name} (not found)\n"
+        f"\n"
+        f"Solutions:\n"
+        f"  - Set ARM_TOOLCHAIN_PATH=/path/to/bin\n"
+        f"  - Add toolchain to PATH: export PATH=~/.pico-sdk/toolchain/*/bin:$PATH\n"
+        f"  - Use Pico SDK VS Code extension (installs to ~/.pico-sdk/)\n"
+        f"  - Use Docker (includes arm-none-eabi-gcc suite)"
+    )
+
+
+# ===========================================================================
+# Pre-Flight Hardware Diagnostics
+# ===========================================================================
+
+def preflight_check(elf_path: str = None, check_elf_age: int = None,
+                    verbose: bool = False) -> dict:
+    """Run pre-flight hardware checks before HIL operations.
+
+    Validates:
+        1. No stale OpenOCD process running on TCL port
+        2. Debug Probe connected and RP2040 responding
+        3. ELF file exists and is valid (if path provided)
+        4. ELF file is fresh (if check_elf_age provided)
+
+    Args:
+        elf_path: Optional path to ELF file to validate.
+        check_elf_age: Optional max age in seconds for ELF staleness check.
+        verbose: Include raw OpenOCD output.
+
+    Returns:
+        dict with status, checks passed/failed, and actionable errors.
+    """
+    start_time = time.monotonic()
+    checks = {}
+    failed_checks = []
+
+    # Check 1: OpenOCD TCL port status
+    if is_openocd_running():
+        checks["openocd_clear"] = {
+            "pass": False,
+            "detail": f"OpenOCD already running on port {TCL_RPC_PORT} (may be intentional)",
+            "advisory": True,  # Not a hard failure
+        }
+        # Don't add to failed_checks — this is advisory only
+    else:
+        checks["openocd_clear"] = {
+            "pass": True,
+            "detail": f"No stale OpenOCD on port {TCL_RPC_PORT}",
+        }
+
+    # Check 2: Probe connectivity (USB → CMSIS-DAP → SWD → RP2040)
+    # Use deferred import to avoid circular dependency
+    try:
+        from probe_check import check_probe_connectivity
+        probe_result = check_probe_connectivity(verbose=False)
+        
+        if probe_result.get("connected"):
+            cores = probe_result.get("cores", [])
+            checks["probe_connected"] = {
+                "pass": True,
+                "detail": f"CMSIS-DAP → RP2040 OK, {len(cores)} cores",
+            }
+        else:
+            checks["probe_connected"] = {
+                "pass": False,
+                "detail": probe_result.get("error", "Unknown probe error"),
+                "suggestions": probe_result.get("suggestions", []),
+            }
+            failed_checks.append("probe_connected")
+    except Exception as e:
+        checks["probe_connected"] = {
+            "pass": False,
+            "detail": f"Probe check failed: {e}",
+            "suggestions": ["Verify debug probe is connected", "Check USB cable"],
+        }
+        failed_checks.append("probe_connected")
+
+    # Check 3: ELF file existence and validity (if path provided)
+    if elf_path:
+        if not os.path.isfile(elf_path):
+            checks["elf_valid"] = {
+                "pass": False,
+                "detail": f"ELF not found: {elf_path}",
+                "suggestions": ["Build firmware first", "Check path is correct"],
+            }
+            failed_checks.append("elf_valid")
+        else:
+            # Get ELF file info
+            elf_stat = os.stat(elf_path)
+            elf_size_mb = elf_stat.st_size / (1024 * 1024)
+            elf_age_s = time.time() - elf_stat.st_mtime
+            
+            detail = f"{os.path.basename(elf_path)}, {elf_size_mb:.1f}MB, age {int(elf_age_s)}s"
+            
+            # Check ELF age if threshold provided
+            if check_elf_age and elf_age_s > check_elf_age:
+                checks["elf_valid"] = {
+                    "pass": False,
+                    "detail": f"{detail} (STALE: >{check_elf_age}s)",
+                    "suggestions": [
+                        "Rebuild firmware",
+                        f"ELF is {int(elf_age_s)}s old, threshold is {check_elf_age}s",
+                    ],
+                }
+                failed_checks.append("elf_valid")
+            else:
+                checks["elf_valid"] = {
+                    "pass": True,
+                    "detail": detail,
+                }
+
+    duration_ms = int((time.monotonic() - start_time) * 1000)
+
+    # Determine overall status
+    status = "pass" if not failed_checks else "fail"
+
+    result = {
+        "status": status,
+        "tool": "preflight_check",
+        "checks": checks,
+        "failed_checks": failed_checks,
+        "duration_ms": duration_ms,
+    }
+
+    return result
+
+
+# ===========================================================================
+# RTT Utilities
+# ===========================================================================
+
+# Boot markers from firmware/app/main.c
+BOOT_MARKER_INIT = "[system_init]"
+BOOT_MARKER_VERSION = "=== AI-Optimized FreeRTOS"
+BOOT_MARKER_SCHEDULER = "Starting FreeRTOS scheduler"
+
+
+def wait_for_rtt_ready(tcl_port: int = TCL_RPC_PORT,
+                       timeout: int = 15,
+                       poll_interval: float = 0.5,
+                       verbose: bool = False) -> dict:
+    """Wait for OpenOCD to discover the SEGGER RTT control block.
+
+    Polls the OpenOCD TCL RPC with 'rtt channels' until channels are
+    reported (indicating the control block was found in SRAM), or timeout.
+
+    The RTT control block is placed in SRAM by firmware during early
+    initialization. OpenOCD scans the range configured in rtt.cfg
+    (0x20000000-0x20042000) for the "SEGGER RTT" magic string.
+
+    Args:
+        tcl_port: OpenOCD TCL RPC port (default: 6666).
+        timeout: Maximum wait time in seconds (default: 15).
+        poll_interval: Time between polls in seconds (default: 0.5).
+        verbose: Print polling progress to stderr.
+
+    Returns:
+        dict with:
+            ready (bool): True if RTT channels were discovered.
+            channels (list): List of channel info if discovered.
+            elapsed_seconds (float): Time spent waiting.
+            error (str or None): Error message if failed.
+    """
+    start_time = time.monotonic()
+    deadline = start_time + timeout
+    
+    # First check if OpenOCD is even running
+    if not is_openocd_running(tcl_port):
+        return {
+            "ready": False,
+            "channels": [],
+            "elapsed_seconds": 0.0,
+            "error": f"OpenOCD not running on port {tcl_port}",
+        }
+    
+    # Create TCL client (reuse across polls)
+    try:
+        client = OpenOCDTclClient(port=tcl_port, timeout=5)
+    except Exception as e:
+        return {
+            "ready": False,
+            "channels": [],
+            "elapsed_seconds": time.monotonic() - start_time,
+            "error": f"Failed to connect to OpenOCD TCL: {e}",
+        }
+    
+    try:
+        while time.monotonic() < deadline:
+            try:
+                # Query RTT channels
+                response = client.send("rtt channels")
+                
+                # Check if response indicates channels are available
+                # Responses look like:
+                #   "Terminal Logger Telemetry" (channel names)
+                #   or empty/error if not found yet
+                if response and "error" not in response.lower():
+                    # Parse channel info (simple check: non-empty response)
+                    channels = response.split()
+                    if channels:
+                        elapsed = time.monotonic() - start_time
+                        if verbose:
+                            print(f"\n  RTT: Control block found! ({elapsed:.1f}s)", file=sys.stderr)
+                        client.close()
+                        return {
+                            "ready": True,
+                            "channels": channels,
+                            "elapsed_seconds": elapsed,
+                            "error": None,
+                        }
+                
+                # Not ready yet
+                if verbose:
+                    elapsed = time.monotonic() - start_time
+                    print(f"\r  RTT: Scanning for control block... ({elapsed:.1f}s)", 
+                          end="", file=sys.stderr)
+                
+            except Exception as e:
+                # TCL command failed — RTT not ready
+                if verbose:
+                    elapsed = time.monotonic() - start_time
+                    print(f"\r  RTT: Scanning for control block... ({elapsed:.1f}s)", 
+                          end="", file=sys.stderr)
+            
+            time.sleep(poll_interval)
+        
+        # Timeout
+        client.close()
+        elapsed = time.monotonic() - start_time
+        if verbose:
+            print(f"\n  RTT: Timeout after {elapsed:.1f}s", file=sys.stderr)
+        
+        return {
+            "ready": False,
+            "channels": [],
+            "elapsed_seconds": elapsed,
+            "error": f"RTT control block not found within {timeout}s",
+        }
+    
+    except Exception as e:
+        client.close()
+        return {
+            "ready": False,
+            "channels": [],
+            "elapsed_seconds": time.monotonic() - start_time,
+            "error": f"RTT polling error: {e}",
+        }
+
+
+def wait_for_boot_marker(rtt_port: int = 9090,
+                         marker: str = BOOT_MARKER_SCHEDULER,
+                         timeout: int = 15,
+                         verbose: bool = False) -> dict:
+    """Wait for a specific boot log marker on RTT Channel 0.
+
+    Connects to RTT Channel 0 (text/printf) and reads until the
+    specified marker string appears in the output, indicating the
+    firmware has reached that initialization stage.
+
+    Default marker is "Starting FreeRTOS scheduler" which is the
+    last printf before the scheduler starts — indicating full boot.
+
+    Args:
+        rtt_port: RTT Channel 0 TCP port (default: 9090).
+        marker: String to search for in the output stream.
+        timeout: Maximum wait time in seconds (default: 15).
+        verbose: Print captured output to stderr in real-time.
+
+    Returns:
+        dict with:
+            found (bool): True if marker was found.
+            boot_log (str): All captured text up to and including the marker.
+            elapsed_seconds (float): Time spent waiting.
+            error (str or None): Error message if failed.
+    """
+    start_time = time.monotonic()
+    deadline = start_time + timeout
+    boot_log = ""
+    sock = None
+    
+    # Retry connection (port may not be ready immediately)
+    connection_timeout = min(5, timeout)
+    conn_deadline = start_time + connection_timeout
+    
+    while time.monotonic() < conn_deadline:
+        try:
+            sock = socket.create_connection(("localhost", rtt_port), timeout=2)
+            sock.settimeout(1.0)
+            break
+        except (ConnectionRefusedError, OSError, socket.timeout):
+            time.sleep(0.5)
+    
+    if sock is None:
+        return {
+            "found": False,
+            "boot_log": "",
+            "elapsed_seconds": time.monotonic() - start_time,
+            "error": f"Failed to connect to RTT Channel 0 (port {rtt_port})",
+        }
+    
+    try:
+        # Read and accumulate data until marker is found or timeout
+        while time.monotonic() < deadline:
+            try:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    # Connection closed
+                    break
+                
+                # Decode as UTF-8 text
+                text = chunk.decode("utf-8", errors="replace")
+                boot_log += text
+                
+                if verbose:
+                    print(text, end="", file=sys.stderr)
+                
+                # Check if marker is in the accumulated log
+                if marker in boot_log:
+                    sock.close()
+                    elapsed = time.monotonic() - start_time
+                    return {
+                        "found": True,
+                        "boot_log": boot_log,
+                        "elapsed_seconds": elapsed,
+                        "error": None,
+                    }
+            
+            except socket.timeout:
+                # No data received in this iteration, continue
+                continue
+            except Exception as e:
+                sock.close()
+                return {
+                    "found": False,
+                    "boot_log": boot_log,
+                    "elapsed_seconds": time.monotonic() - start_time,
+                    "error": f"Socket error: {e}",
+                }
+        
+        # Timeout or connection closed
+        sock.close()
+        elapsed = time.monotonic() - start_time
+        
+        # Advisory note if we got no data
+        advisory = None
+        if not boot_log.strip():
+            advisory = "No data received — firmware may have already booted before capture started"
+        
+        return {
+            "found": False,
+            "boot_log": boot_log,
+            "elapsed_seconds": elapsed,
+            "error": f"Boot marker '{marker}' not found within {timeout}s",
+            "advisory": advisory,
+        }
+    
+    except Exception as e:
+        if sock:
+            sock.close()
+        return {
+            "found": False,
+            "boot_log": boot_log,
+            "elapsed_seconds": time.monotonic() - start_time,
+            "error": f"Unexpected error: {e}",
+        }
+
 
 # ===========================================================================
 # OpenOCD Process Management
@@ -514,7 +919,7 @@ def _self_test():
         print("  ✗ OpenOCDTclClient class incomplete")
 
     # Test 5: Constants
-    print("\n[5/5] Constants verification...")
+    print("\n[5/6] Constants verification...")
     assert TCL_RPC_PORT == 6666
     assert GDB_PORT == 3333
     assert DEFAULT_ADAPTER_SPEED == 5000
@@ -522,6 +927,51 @@ def _self_test():
     print(f"  ✓ TCL_RPC_PORT={TCL_RPC_PORT}, GDB_PORT={GDB_PORT}")
     print(f"  ✓ DEFAULT_ADAPTER_SPEED={DEFAULT_ADAPTER_SPEED}")
     print(f"  ✓ DEFAULT_ELF_PATH={DEFAULT_ELF_PATH}")
+
+    # Test 6: ARM toolchain discovery
+    print("\n[6/10] ARM toolchain discovery...")
+    try:
+        addr2line = find_arm_toolchain("arm-none-eabi-addr2line")
+        print(f"  ✓ addr2line binary: {addr2line}")
+    except FileNotFoundError as e:
+        print(f"  ✗ Not found (expected in CI/Docker-less environments)")
+        print(f"    {e.args[0].split(chr(10))[0]}")
+
+    # Test 7: preflight_check function
+    print("\n[7/10] preflight_check function...")
+    try:
+        assert callable(preflight_check)
+        print(f"  ✓ preflight_check() function is callable")
+    except (AssertionError, NameError):
+        print(f"  ✗ preflight_check() function not found")
+
+    # Test 8: wait_for_rtt_ready function
+    print("\n[8/10] wait_for_rtt_ready function...")
+    try:
+        assert callable(wait_for_rtt_ready)
+        print(f"  ✓ wait_for_rtt_ready() function is callable")
+    except (AssertionError, NameError):
+        print(f"  ✗ wait_for_rtt_ready() function not found")
+
+    # Test 9: wait_for_boot_marker function
+    print("\n[9/10] wait_for_boot_marker function...")
+    try:
+        assert callable(wait_for_boot_marker)
+        print(f"  ✓ wait_for_boot_marker() function is callable")
+    except (AssertionError, NameError):
+        print(f"  ✗ wait_for_boot_marker() function not found")
+
+    # Test 10: Boot marker constants
+    print("\n[10/10] Boot marker constants verification...")
+    try:
+        assert BOOT_MARKER_INIT == "[system_init]"
+        assert BOOT_MARKER_VERSION == "=== AI-Optimized FreeRTOS"
+        assert BOOT_MARKER_SCHEDULER == "Starting FreeRTOS scheduler"
+        print(f"  ✓ BOOT_MARKER_INIT={BOOT_MARKER_INIT}")
+        print(f"  ✓ BOOT_MARKER_VERSION={BOOT_MARKER_VERSION}")
+        print(f"  ✓ BOOT_MARKER_SCHEDULER={BOOT_MARKER_SCHEDULER}")
+    except (AssertionError, NameError):
+        print(f"  ✗ Boot marker constants not defined correctly")
 
     print("\n" + "=" * 60)
     print("Self-test complete.")

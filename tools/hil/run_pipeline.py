@@ -36,6 +36,7 @@ from openocd_utils import (
     is_openocd_running,
     start_openocd_server,
     wait_for_openocd_ready,
+    wait_for_rtt_ready,
     TCL_RPC_PORT,
 )
 
@@ -265,8 +266,15 @@ def stage_rtt_capture(project_root: str, duration_secs: int = 5,
                 "error": str(e).split("\n")[0],
             }
 
-    # Wait briefly for RTT to initialize and target to start logging
-    time.sleep(1.0)
+    # Wait for OpenOCD to discover RTT control block
+    if verbose:
+        print("  Waiting for RTT control block...", file=sys.stderr)
+    rtt_status = wait_for_rtt_ready(timeout=10, verbose=verbose)
+    if not rtt_status.get("ready"):
+        # Fallback: brief delay even if polling failed
+        if verbose:
+            print("  RTT polling timeout, using fallback sleep...", file=sys.stderr)
+        time.sleep(2.0)
 
     # Capture RTT binary data from port 9091
     bytes_received = 0
