@@ -57,21 +57,18 @@ Agent (terminal commands)
 
 ## 2. Docker Build — The Volume Gotcha
 
-### ⚠️ Critical: Named Volume Hides Build Output from Host
+### ✅ FIXED in PIV-007: Bind Mount Replaces Named Volume
 
-The `docker-compose.yml` uses a **named volume** (`build-cache`) mounted at `/workspace/build`. This means:
+The `docker-compose.yml` now uses a **bind mount** instead of a named volume. Build output automatically appears on the host filesystem at `build/firmware/app/firmware.elf`.
 
-- **Build output lives inside the Docker volume**, not on the host filesystem.
-- The host's `build/` directory may contain stale artifacts from a previous local build.
-- After `docker compose run --rm build`, the host's `build/firmware/app/firmware.elf` is **NOT updated**.
+**Previous issue (resolved):** The old `build-cache` named volume hid build output inside Docker. After `docker compose run --rm build`, the host's `build/` directory contained stale artifacts.
 
-### ✅ Solution: Copy the ELF from Docker Volume to Host
+**Current behavior:** The `../../build:/workspace/build` bind mount writes directly to the host. No manual copy needed.
 
 ```bash
-# After building, copy the fresh ELF out:
-docker compose -f tools/docker/docker-compose.yml run --rm \
-  -v "$(pwd)/build:/host-build" build \
-  bash -c "cp /workspace/build/firmware/app/firmware.elf /host-build/firmware/app/firmware.elf"
+# Build — output appears on host automatically
+docker compose -f tools/docker/docker-compose.yml run --rm build
+ls -la build/firmware/app/firmware.elf  # Fresh build, ready to flash
 ```
 
 ### How to Verify You Have the Right ELF
@@ -130,6 +127,28 @@ python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf --json
 ---
 
 ## 4. RTT Capture — What Worked, What Didn't
+
+### ✅ Recommended: Use `reset.py` for Reset + RTT Restart
+
+For firmware iteration without reflashing:
+
+```bash
+# Reset target and start RTT in one command (~6s faster than reflash)
+python3 tools/hil/reset.py --with-rtt --json
+# RTT ports 9090/9091/9092 now available
+```
+
+**What it does:**
+1. Kills existing OpenOCD
+2. Resets target via one-shot SWD command
+3. Waits for boot (default: 5s)
+4. Starts OpenOCD with RTT on ports 9090/9091/9092
+
+**Use `--reset-only` flag on `flash.py` for lightweight reset:**
+```bash
+# Just reset, no RTT server
+python3 tools/hil/flash.py --reset-only --json
+```
 
 ### ✅ What Worked: Flash → Wait → Start OpenOCD → Capture
 
@@ -276,18 +295,27 @@ client.close()
 
 ## 6. crash_decoder.py — addr2line PATH Requirement
 
-### ⚠️ `arm-none-eabi-addr2line` Is NOT in System PATH
+### ✅ FIXED in PIV-007: Auto-Detected Toolchain
 
-The Pico SDK's GCC toolchain is installed at `~/.pico-sdk/toolchain/14_2_Rel1/bin/` and is **not** added to the system `PATH` by default. `crash_decoder.py` calls `arm-none-eabi-addr2line` and will fail with a graceful degradation (prints addresses without resolution).
+`crash_decoder.py` now auto-detects `arm-none-eabi-addr2line` via `openocd_utils.find_arm_toolchain()`. No manual PATH setup required.
 
-### ✅ Solution: Prepend Toolchain to PATH
+**Search order:**
+1. `$ARM_TOOLCHAIN_PATH` environment variable
+2. System PATH (works inside Docker)
+3. `~/.pico-sdk/toolchain/*/bin/` (Pico SDK VS Code extension)
 
 ```bash
-PATH="$HOME/.pico-sdk/toolchain/14_2_Rel1/bin:$PATH" \
-  python3 tools/health/crash_decoder.py \
-    --json crash_test.json \
-    --elf build/firmware/app/firmware.elf \
-    --output text
+# Just works — no PATH= prefix needed
+python3 tools/health/crash_decoder.py \
+  --json crash_test.json \
+  --elf build/firmware/app/firmware.elf \
+  --output text
+```
+
+**Previous behavior (resolved):** Manual PATH prepending was required:
+```bash
+# Old workaround (no longer needed):
+PATH="$HOME/.pico-sdk/toolchain/14_2_Rel1/bin:$PATH" python3 tools/health/crash_decoder.py ...
 ```
 
 ### Example Output (with addr2line)
@@ -361,28 +389,27 @@ if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) {
 
 ## 8. Complete Working Recipes
 
-### Recipe A: Build + Flash + Verify Boot
+### Recipe A: Build + Flash + Verify Boot (PIV-007 Updated)
 
 ```bash
-# 1. Build
+# 1. Build (output goes to host filesystem automatically via bind mount)
 cd /path/to/project
 docker compose -f tools/docker/docker-compose.yml run --rm build
 
-# 2. Copy ELF from Docker volume to host
-docker compose -f tools/docker/docker-compose.yml run --rm \
-  -v "$(pwd)/build:/host-build" build \
-  bash -c "cp /workspace/build/firmware/app/firmware.elf /host-build/firmware/app/firmware.elf"
+# 2. Verify ELF is fresh (optional, use --check-age flag)
+ls -la build/firmware/app/firmware.elf
 
 # 3. Kill any existing OpenOCD
 pkill -f openocd; sleep 1
 
-# 4. Flash
-python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf --json
+# 4. Flash with staleness check
+python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf --check-age --json
 
 # 5. Wait for boot
 sleep 5
 
-# 6. Start OpenOCD + RTT and capture (use Python — see Section 4)
+# 6. Start RTT using reset.py (faster for iteration)
+python3 tools/hil/reset.py --with-rtt --json
 ```
 
 ### Recipe B: Intentional Crash Test Cycle
@@ -419,38 +446,43 @@ assert 'system_init' not in text, "System rebooted — watchdog failing!"
 
 ## 9. Anti-Patterns — What NOT to Do
 
-| Anti-Pattern | What Happens | Do This Instead |
-|---|---|---|
-| Flash without copying ELF from Docker | Old binary is flashed; same bug persists | Always `docker cp` after build |
-| Start OpenOCD immediately after flash | RTT control block not yet initialized | Wait 3–5 seconds |
-| Reset target via TCL then capture RTT | 0 bytes — RTT scanner loses control block | Kill OpenOCD, re-flash, restart OpenOCD |
-| Use `arm-none-eabi-addr2line` without PATH | Command not found / silent failure | Prepend `~/.pico-sdk/toolchain/*/bin` |
-| Call `flash_safe_execute` before scheduler | Infinite deadlock on SMP lockout | Check `xTaskGetSchedulerState()` first |
-| Assume `nc localhost 9090` captures boot | Boot messages are one-shot; timing matters | Use Python socket with `settimeout` loop |
-| Run `flash.py` with OpenOCD already running | SWD interface busy, flash fails | `pkill -f openocd` before flashing |
+| Anti-Pattern | What Happens | Do This Instead | Status |
+|---|---|---|---|
+| Flash without copying ELF from Docker | Old binary is flashed; same bug persists | Use bind mount (PIV-007) | ✅ FIXED |
+| Start OpenOCD immediately after flash | RTT control block not yet initialized | Wait 3–5 seconds | Still relevant |
+| Reset target via TCL then capture RTT | 0 bytes — RTT scanner loses control block | Use `reset.py --with-rtt` (PIV-007) | ✅ FIXED |
+| Use `arm-none-eabi-addr2line` without PATH | Command not found / silent failure | Auto-detected (PIV-007) | ✅ FIXED |
+| Flash stale ELF without checking age | Debugging yesterday's code | Use `--check-age` flag (PIV-007) | ✅ FIXED |
+| Call `flash_safe_execute` before scheduler | Infinite deadlock on SMP lockout | Check `xTaskGetSchedulerState()` first | Still relevant |
+| Assume `nc localhost 9090` captures boot | Boot messages are one-shot; timing matters | Use Python socket with `settimeout` loop | Still relevant |
+| Run `flash.py` with OpenOCD already running | SWD interface busy, flash fails | `pkill -f openocd` before flashing | Still relevant |
 
 ---
 
 ## 10. Tool Reference Matrix
 
-| Tool | Purpose | Requires OpenOCD Running? | Requires Probe? |
-|------|---------|--------------------------|-----------------|
-| `flash.py` | One-shot flash + verify | **No** (runs its own) | Yes |
-| `run_pipeline.py` | Full build→flash→RTT | **No** (manages its own) | Yes |
-| `probe_check.py` | Verify probe connectivity | No | Yes |
-| `ahi_tool.py` | Memory read/write | **Yes** (TCL RPC) | Yes |
-| `run_hw_test.py` | Automated HW tests | **Yes** | Yes |
-| `crash_decoder.py` | Decode crash JSON | No | No (host-only) |
-| `health_dashboard.py` | Analyze telemetry JSONL | No | No (host-only) |
+| Tool | Purpose | Requires OpenOCD Running? | Requires Probe? | Added |
+|------|---------|--------------------------|-----------------|-------|
+| `flash.py` | One-shot flash + verify | **No** (runs its own) | Yes | PIV-004 |
+| `flash.py --reset-only` | Reset without reflash | **No** (one-shot) | Yes | **PIV-007** |
+| `flash.py --check-age` | Warn about stale ELF | **No** | Yes | **PIV-007** |
+| `reset.py` | Reset + optional RTT restart | **No** (manages own) | Yes | **PIV-007** |
+| `run_pipeline.py` | Full build→flash→RTT | **No** (manages its own) | Yes | PIV-004 |
+| `probe_check.py` | Verify probe connectivity | No | Yes | PIV-004 |
+| `ahi_tool.py` | Memory read/write | **Yes** (TCL RPC) | Yes | PIV-004 |
+| `run_hw_test.py` | Automated HW tests | **Yes** | Yes | PIV-004 |
+| `crash_decoder.py` | Decode crash JSON (auto-detects addr2line) | No | No (host-only) | PIV-006 |
+| `health_dashboard.py` | Analyze telemetry JSONL | No | No (host-only) | PIV-005 |
 
 ### File Locations
 
 ```
 tools/
 ├── hil/
-│   ├── flash.py              # SWD flash wrapper
+│   ├── flash.py              # SWD flash wrapper (+ --reset-only, --check-age)
+│   ├── reset.py              # Target reset + optional RTT restart (PIV-007)
 │   ├── run_pipeline.py       # Build → Flash → RTT pipeline
-│   ├── openocd_utils.py      # Shared OpenOCD utilities
+│   ├── openocd_utils.py      # Shared OpenOCD utilities (+ find_arm_toolchain)
 │   ├── probe_check.py        # Probe connectivity check
 │   ├── ahi_tool.py           # Address/Hardware Inspector
 │   ├── run_hw_test.py        # Hardware test runner

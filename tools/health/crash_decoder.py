@@ -13,8 +13,13 @@ Usage:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+
+# Import ARM toolchain discovery from HIL utilities
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'hil'))
+from openocd_utils import find_arm_toolchain
 
 
 # =========================================================================
@@ -214,6 +219,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Auto-detect addr2line path
+    addr2line_path = args.addr2line
+    if addr2line_path == DEFAULT_ADDR2LINE:
+        try:
+            addr2line_path = find_arm_toolchain("arm-none-eabi-addr2line")
+        except FileNotFoundError:
+            pass  # Fall through to bare name — resolve_address handles gracefully
+
     # Read crash JSON
     try:
         if args.json:
@@ -240,7 +253,7 @@ def main():
 
     # Parse and decode
     crash = parse_crash_json(raw)
-    decoded = decode_crash(crash, args.elf, args.addr2line)
+    decoded = decode_crash(crash, args.elf, addr2line_path)
 
     # Output
     if args.output == "json":

@@ -15,8 +15,8 @@ services:
     volumes:
       # Mount project source (read-write)
       - ../../:/workspace
-      # Named volume for build cache (persists between runs)
-      - build-cache:/workspace/build
+      # Bind mount for build output (visible on host)
+      - ../../build:/workspace/build
     environment:
       - PICO_SDK_PATH=/workspace/lib/pico-sdk
       - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
@@ -35,7 +35,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ../../:/workspace
-      - build-cache:/workspace/build
+      - ../../build:/workspace/build
       # Bind mount (sees new devices after hot-plug)
       - /dev/bus/usb:/dev/bus/usb
       # udev metadata for libusb device discovery
@@ -65,7 +65,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ../../:/workspace
-      - build-cache:/workspace/build
+      - ../../build:/workspace/build
       - /dev/bus/usb:/dev/bus/usb
       - /run/udev:/run/udev:ro
     device_cgroup_rules:
@@ -85,6 +85,3 @@ services:
       openocd -f tools/hil/openocd/pico-probe.cfg
               -f tools/hil/openocd/rtt.cfg
               -c "bindto 0.0.0.0"
-
-volumes:
-  build-cache:
