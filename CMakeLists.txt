@@ -38,5 +38,12 @@ set(FREERTOS_CONFIG_FILE_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/firmware/core CACHE
 # The import script auto-detects the RP2040 port based on PICO_PLATFORM.
 include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
 
+# =========================================================================
+# Build Helper Targets (portability, IntelliSense setup)
+# =========================================================================
+# These targets handle post-build steps like rewriting compile_commands.json
+# paths to be portable across Docker and native builds.
+include(${CMAKE_CURRENT_LIST_DIR}/tools/build_helpers/CMakeLists.txt)
+
 # Add firmware subdirectory
 add_subdirectory(firmware)
