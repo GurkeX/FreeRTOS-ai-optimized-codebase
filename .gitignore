@@ -50,3 +50,6 @@ telemetry_raw.jsonl
 
 # Docker
 .docker/
+
+# Temporary test data
+temp/
