@@ -17,7 +17,7 @@ Review Philosophy:
 
 Start by gathering codebase context to understand the codebase standards and patterns.
 
-For this, follow ALL instructions in [priming.prompt.md](./core_commands/prime.prompt.md) but keep the last part "## Output Report" to your own thoughts **not** outputing to the user.
+For this, follow ALL instructions in [priming.prompt.md](../../coding/core_piv_loop/prime.prompt.md) but keep the last part "## Output Report" to your own thoughts **not** outputing to the user.
 
 After you have a good understanding
 
@@ -81,7 +81,7 @@ For each changed file or new file, analyze for:
 
 ## Output Format
 
-Save a new file to `.agents/refrence/piv-loop-iterations/[current-piv-iteration-folder]/documentation/[appropriate-name].md`
+Save a new file to `.agents/reference/piv-loop-iterations/[current-piv-iteration-folder]/documentation/[appropriate-name].md`
 
 **Stats:**
 

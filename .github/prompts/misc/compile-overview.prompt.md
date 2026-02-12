@@ -16,7 +16,7 @@ Create a informationdense, wellstructured markdown document giving an overview o
 1. Create a clear hierarchy using headings and subheadings.
 2. Use bullet points or numbered lists for clarity where appropriate.
 3. Include code snippets, diagrams, or tables if they help illustrate key points.
-4. Research **usefull** external references or resources to support the findings, and include them as links.
+4. Research **useful** external references or resources to support the findings, and include them as links.
 
 ### Step 3: Write the Overview
 1. Create a new markdown file named'[CONVERSATION_NICKNAME]-overview.md'.

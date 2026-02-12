@@ -6,7 +6,7 @@ Perform comprehensive system review based on context of recent PIV iteration loo
 
 ## Core Principles
 - Spot divergence from [implementation-plan], when comparing with [execution-report] 
-	- Differenciate between **Good Divergence**:
+	- Differentiate between **Good Divergence**:
 		- Plan assumed something that didn't exist
 		- Better pattern found during implementation
 		- Performance optimization needed
@@ -19,17 +19,17 @@ Perform comprehensive system review based on context of recent PIV iteration loo
 - Document **both** types of divergence. Good divergence improves the existing plan. Bad divergence reveals unclear requirements
 
 ## Context
-- The [execution-report] is, what the coding agent generated, after implementing the [implementation-plan], reflecting on what it implemented, how it aligns with the plan, what challanges were encountered and what diverged and why. This is the **subjective** perception of the agent and no facts.
+- The [execution-report] is, what the coding agent generated, after implementing the [implementation-plan], reflecting on what it implemented, how it aligns with the plan, what challenges were encountered and what diverged and why. This is the **subjective** perception of the agent and no facts.
 - The [implementation-plan] and of course copilot-instructions.md is **all** the agent had to work off, when starting its implementation
 - Implementation-plan creation workflow:
   1. Use prime.prompt.md to prime coding agent on codespace
-  2. Discuss new feature, wich tech stack to use, integration points, what to look out for, any prefrences
+  2. Discuss new feature, which tech stack to use, integration points, what to look out for, any preferences
   3. Use plan-feature.prompt.md to create final implementation plan
   4. Start new conversation and use execute.prompt.md to execute just created implementation plan
 
 ## Your task:
-1. Compare the [implementation-plan] to the [execution-report] and **document** any **divergences** you can find, noting wheather the are good divergence or bad divergence
-2. Do a **root cause analasys** for each of the **bad divergences** sequentially, one at a time.
+1. Compare the [implementation-plan] to the [execution-report] and **document** any **divergences** you can find, noting whether the are good divergence or bad divergence
+2. Do a **root cause analysis** for each of the **bad divergences** sequentially, one at a time.
 3. Read through the documents in the coding system, which lead to the creation of the plan, like copilot-instructions.md, any best practice or pattern documents. 
 4. Document specific actionable changes to the system based on your root cause analysis, on bad divergences. These can be changes to any of the layer 1 documents, which lead to the creation of the plan: prompts, instructions, PRDs, patterns...
 

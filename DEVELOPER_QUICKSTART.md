@@ -21,19 +21,33 @@ cd build && cmake .. -G Ninja && ninja
 ### Windows/WSL
 Same as native (use WSL2 with Ubuntu 22.04).
 
-## Post-Build Steps (Automatic)
+## Post-Build Steps
 
-After your first build, **IntelliSense should work automatically.** Here's why:
+### IntelliSense Setup (Required After Docker Build)
 
-1. **CMake auto-fixes paths** — The build system includes a post-build step that rewrites
-   `build/compile_commands.json` to use real absolute paths (not Docker `/workspace/` paths).
-   See [tools/build_helpers/README.md](tools/build_helpers/README.md) for details.
+**Docker builds require an additional step** — the CMake post-build path fix is a no-op inside
+Docker because `CMAKE_SOURCE_DIR=/workspace` (same as the Docker paths). The host-side Python
+script correctly replaces `/workspace/` with your real project path.
 
-2. **.clangd config** — The `.clangd` file at project root tells clangd/VS Code's IntelliSense
-   to use the fixed compilation database.
+**After every Docker build, run from project root:**
+```bash
+python3 tools/build_helpers/fix_compile_commands.py
+```
 
-3. **VS Code discovers everything** — When you open the project in VS Code, it auto-discovers
-   the `compile_commands.json` and uses it for IntelliSense, go-to-definition, refactoring, etc.
+This rewrites `build/compile_commands.json` to use real absolute paths, enabling IntelliSense.
+
+**Native builds (non-Docker)** — CMake auto-fixes paths during build. No manual step needed.
+
+### Why This Is Needed
+
+1. **Docker compile_commands.json has container paths** — `/workspace/build/...`
+2. **The Python script replaces with host paths** — `/home/user/project/build/...`
+3. **VS Code IntelliSense reads the fixed paths** — autocomplete, go-to-definition, etc. work
+4. **VS Code uses `.vscode/c_cpp_properties.json`** — the `compileCommands` field points to the
+   fixed database
+
+See [tools/build_helpers/README.md](tools/build_helpers/README.md) for details on why the CMake
+hook can't run inside Docker.
 
 ## Verify IntelliSense
 

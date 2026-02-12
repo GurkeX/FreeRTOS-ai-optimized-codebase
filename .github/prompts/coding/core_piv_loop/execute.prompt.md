@@ -1,14 +1,12 @@
 ---
 description: Execute an implementation plan
-argument-hint: [path-to-plan]
-allowed-tools: Read, Write, Edit, Bash(ruff:*), Bash(mypy:*), Bash(pytest:*), Bash(npm:*), Bash(bun:*)
 ---
 
 ## Execution Instructions
 
 ### 1. Read and Understand
 
--   Read the ENTIRE [implementation_plan](${input:file:path-to-plan}) carefully
+-   Read the ENTIRE [USER_PROVIDED_IMPLEMENTATIONPLAN] carefully
 -   Understand all tasks and their dependencies
 -   Note the validation commands to run
 -   Review the testing strategy
@@ -72,7 +70,7 @@ Before completing:
 
 ## Output Testing Guide under ${CURR_PIV_ITERATION_FOLDER}/testing/testing_guide.md
 
--   Follow guidance and structure of: [testing-guide-creation.md](testing-guide-creation.md)
+-   Follow guidance and structure of: [testing-guide-creation.md](../../instructions/testing-guide-creation.md)
 -   Comprehensive guide on how to test the implementation
 -   Instructions to run tests for different scenarios
 -   Expected outcomes for each test
@@ -83,7 +81,7 @@ Provide summary in ${CURR_PIV_ITERATION_FOLDER}/documentation:
 
 ## Output Timeline update
 
-Update [project timeline](../../../.agents/refrence/piv-loop-iterations/project-timeline.md) with concise summary (~10 lines):
+Update [project timeline](../../../../.agents/reference/piv-loop-iterations/project-timeline.md) with concise summary (~10 lines):
 
 ### [PIV-XXX]: [Iteration Name]
 

@@ -17,7 +17,7 @@ You have just finished implementing a feature. Before moving on, reflect on:
 
 ## Generate Report
 
-Save to: `.agents/refrence/piv-loop-iterations/[current-piv-iteration-folder]/documentation/[report-name].md`
+Save to: `.agents/reference/piv-loop-iterations/[current-piv-iteration-folder]/documentation/[report-name].md`
 
 ### Meta Information
 

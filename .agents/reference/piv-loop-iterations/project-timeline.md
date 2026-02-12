@@ -131,3 +131,16 @@
 - Key files: `firmware/core/FreeRTOSConfig.h`, `CMakeLists.txt`, `tools/docker/docker-compose.yml`, `.github/prompts/codebase-workflows/build-production-uf2.prompt.md`, `.agents/reference/piv-loop-iterations/project-timeline.md`
 
 ---
+
+### PIV-011: Dev Environment Cleanup
+
+**Implemented Features:**
+- IntelliSense path fix workflow documented: `fix_compile_commands.py` replaces Docker `/workspace/` paths with host paths (1,371 references)
+- DEVELOPER_QUICKSTART.md updated with clear post-Docker-build instructions and explanation of why CMake fix is no-op inside Docker
+- c_cpp_properties.json includePath narrowed from broad `**` glob to 11 specific paths, excluding `lib/pico-sdk/src/host/` stubs (~200 false errors eliminated)
+- Markdown link corrections: fixed 9+ broken links across 8 prompt files (refrence→reference, corrected path depths, removed Obsidian vault references)
+- Spelling fixes: 7 typos corrected across 2 prompt files (Differenciate, challanges, wich, prefrences, wheather, analasys, usefull)
+- PIV iteration template created: `.agents/reference/piv-loop-iterations/piv-iteration-template/` with structure for future iterations
+- Key files: `.vscode/c_cpp_properties.json`, `DEVELOPER_QUICKSTART.md`, 8 files in `.github/prompts/`, piv-iteration-template structure
+
+---

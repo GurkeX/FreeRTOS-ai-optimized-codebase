@@ -376,10 +376,10 @@ Execute every command to ensure zero regressions and 100% feature correctness.
 
 **Folderstructure**:
 
--   Copy [piv-iteration-template](../../../.agents/refrence/piv-loop-iterations/piv-iteration-template/)
-    -> Paste into: `.agents/refrence/piv-loop-iterations/00X-[kebab-case-descriptive-name]/`
+-   Copy [piv-iteration-template](../../../../.agents/reference/piv-loop-iterations/piv-iteration-template)
+    -> Paste into: `.agents/reference/piv-loop-iterations/00X-[kebab-case-descriptive-name]/`
 
-**Filename**: `.agents/refrence/piv-loop-iterations/00X-[kebab-case-descriptive-name/{kebab-case-descriptive-name}.md`
+**Filename**: `.agents/reference/piv-loop-iterations/00X-[kebab-case-descriptive-name/{kebab-case-descriptive-name}.md`
 
 -   Replace `{kebab-case-descriptive-name}` with short, descriptive feature name
 -   Examples: `add-user-authentication.md`, `implement-search-api.md`, `refactor-database-layer.md`

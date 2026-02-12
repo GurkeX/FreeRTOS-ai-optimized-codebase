@@ -36,8 +36,8 @@ Based on the structure, identify and read:
 
 ### 4. Identify current state
 
-- Read through [project-timeline.md](../../../.agents/refrence/piv-loop-iterations/project-timeline.md) to understand current phase and recent changes
-- Compare with [PRD](../../../.agents/refrence/PRD.md) for overall goals
+- Read through [project-timeline.md](../../../../.agents/reference/piv-loop-iterations/project-timeline.md) to understand current phase and recent changes
+- Review the [README.md](../../../../README.md) for overall project goals and architecture overview
 
 **Important**: Make sure all files you read originate from the codebase itself, not from external libraries or dependencies.
 
