@@ -363,3 +363,11 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tre
 9. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
 10. **Log with tokenized macros, not printf** — use `LOG_INFO()` etc. for machine-readable output. `printf()` goes to RTT Channel 0 (text) and is acceptable for boot messages only.
 11. **Test on real hardware via HIL** — the codebase is designed for hardware-in-the-loop validation via the `tools/hil/` scripts. Always flash and verify behavior on the actual Pico W after changes.
+12. **Use `temp/` for temporary test files** — create test data (crash JSONs, telemetry samples) inside project's `temp/` directory for auto-approval. Example:
+    ```bash
+    mkdir -p temp
+    echo '{"magic":"0xDEADFA11",...}' > temp/test_crash.json
+    python3 tools/health/crash_decoder.py --json temp/test_crash.json --elf build/firmware/app/firmware.elf
+    rm -rf temp/
+    ```
+    Never use `/tmp/` — files outside workspace require manual approval.
