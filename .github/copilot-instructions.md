@@ -42,29 +42,37 @@ test/                  ← Dual-nature testing
 
 ## 2. Build System
 
-### Local Build (Native Toolchain)
+### Docker Build (Primary Method)
 
-The workspace has the Pico SDK toolchain installed via `~/.pico-sdk/`. VS Code tasks are pre-configured:
-
-```bash
-# Configure (only needed once or after CMakeLists.txt changes)
-cd build && cmake .. -G Ninja
-
-# Compile (use the VS Code task "Compile Project" or:)
-~/.pico-sdk/ninja/v1.12.1/ninja -C build
-```
-
-**Output artifacts:**
-- `build/firmware/app/firmware.elf` — Main ELF for flashing/debugging
-- `build/firmware/app/firmware.uf2` — UF2 for drag-and-drop (BOOTSEL mode)
-
-### Docker Build (Hermetic)
+**All compilation happens inside the Docker container.** The host system is only used for transferring binaries to the Raspberry Pi Pico hardware via SWD/OpenOCD.
 
 ```bash
 docker compose -f tools/docker/docker-compose.yml run --rm build
 ```
 
-Build output is bind-mounted to `./build/` — visible on host immediately.
+**Build output** is bind-mounted to `./build/` on the host — artifacts appear immediately after compilation:
+- `build/firmware/app/firmware.elf` — Main ELF for flashing/debugging
+- `build/firmware/app/firmware.uf2` — UF2 for drag-and-drop (BOOTSEL mode)
+
+**Key points:**
+- Docker container has the complete Pico SDK toolchain (v2.2.0), CMake, Ninja, and ARM GCC
+- Hermetic environment ensures reproducible builds across different host systems
+- No local toolchain installation required on the host
+- Host only needs: Python 3, Docker, and OpenOCD for hardware interaction
+
+### Local Build (Optional Alternative)
+
+If a local toolchain is installed via `~/.pico-sdk/`, you can build natively:
+
+```bash
+# Configure (only needed once or after CMakeLists.txt changes)
+cd build && cmake .. -G Ninja
+
+# Compile
+~/.pico-sdk/ninja/v1.12.1/ninja -C build
+```
+
+**Note:** Local builds are NOT the default workflow. The project is designed for Docker-based compilation.
 
 ### CMake Structure
 
@@ -210,22 +218,26 @@ python3 tools/telemetry/telemetry_manager.py --mode raw --duration 300 | \
 ### Quick Test (Build → Flash → RTT Capture)
 
 ```bash
-bash tools/hil/quick_test.sh                      # Full workflow
-bash tools/hil/quick_test.sh --skip-build          # Flash + capture only
+bash tools/hil/quick_test.sh                      # Full workflow (Docker build + flash + capture)
+bash tools/hil/quick_test.sh --skip-build          # Flash + capture only (no build)
 bash tools/hil/quick_test.sh --duration 30         # Longer capture
 ```
+
+**Note:** Default build step uses Docker container. Host handles flashing via OpenOCD and RTT capture.
 
 ### Full Pipeline (Build → Flash → RTT → Decode)
 
 ```bash
-python3 tools/hil/run_pipeline.py --json
-python3 tools/hil/run_pipeline.py --skip-build --json
+python3 tools/hil/run_pipeline.py --json           # Docker build + flash + RTT + decode
+python3 tools/hil/run_pipeline.py --skip-build --json  # Skip build, use existing ELF
 ```
+
+**Note:** Pipeline uses Docker for compilation. Host runs Python tools for hardware interaction and data decoding.
 
 ### Crash Test Cycle
 
 ```bash
-bash tools/hil/crash_test.sh                       # Build → flash → wait for crash → decode
+bash tools/hil/crash_test.sh                       # Docker build → flash → wait for crash → decode
 bash tools/hil/crash_test.sh --skip-build           # Flash existing crash-trigger build
 ```
 
@@ -352,13 +364,18 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tre
 
 ## 11. AI Agent Instructions
 
-1. **All HIL tools output structured JSON** — always pass `--json` and parse the JSON output for status/error determination. Do not regex human-readable text.
-2. **Always probe before flash** — run `probe_check.py --json` or use `--preflight` before flashing. Never assume hardware is connected.
-3. **Build before flash** — ensure the ELF is current. Use `--check-age` flag to detect stale builds (>120s).
-4. **Wait for boot** — after flashing, first boot with LittleFS takes 5–7s. Use `wait_for_rtt_ready()` or adequate delays before capturing RTT.
-5. **Kill stale OpenOCD** — before starting a new OpenOCD instance, always `pkill openocd`. Only one instance can own the SWD interface.
-6. **Do NOT edit files under `lib/`** — these are git submodules (pico-sdk, FreeRTOS-Kernel, littlefs, cJSON). Treat as read-only.
-7. **Respect the boot init order** — see Section 8. Adding new subsystems means inserting at the correct phase in `main.c`.
-8. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
-9. **Log with tokenized macros, not printf** — use `LOG_INFO()` etc. for machine-readable output. `printf()` goes to RTT Channel 0 (text) and is acceptable for boot messages only.
-10. **Test on real hardware via HIL** — the codebase is designed for hardware-in-the-loop validation via the `tools/hil/` scripts. Always flash and verify behavior on the actual Pico W after changes.
+1. **ALWAYS compile inside Docker container** — use `docker compose -f tools/docker/docker-compose.yml run --rm build` for ALL code compilation. NEVER use local toolchain (`ninja`, `cmake`, VS Code tasks) unless explicitly requested. The host system is ONLY for:
+   - Flashing binaries to hardware via OpenOCD/SWD (`tools/hil/flash.py`)
+   - Running Python HIL tools (`probe_check.py`, `reset.py`, `ahi_tool.py`, etc.)
+   - Capturing RTT logs/telemetry via TCP ports (9090-9092)
+   - Decoding logs, telemetry, and crashes with Python scripts
+2. **All HIL tools output structured JSON** — always pass `--json` and parse the JSON output for status/error determination. Do not regex human-readable text.
+3. **Always probe before flash** — run `probe_check.py --json` or use `--preflight` before flashing. Never assume hardware is connected.
+4. **Build before flash** — ensure the ELF is current. Use `--check-age` flag to detect stale builds (>120s). Remember: builds happen in Docker, artifacts appear in `./build/` via bind mount.
+5. **Wait for boot** — after flashing, first boot with LittleFS takes 5–7s. Use `wait_for_rtt_ready()` or adequate delays before capturing RTT.
+6. **Kill stale OpenOCD** — before starting a new OpenOCD instance, always `pkill openocd`. Only one instance can own the SWD interface.
+7. **Do NOT edit files under `lib/`** — these are git submodules (pico-sdk, FreeRTOS-Kernel, littlefs, cJSON). Treat as read-only.
+8. **Respect the boot init order** — see Section 8. Adding new subsystems means inserting at the correct phase in `main.c`.
+9. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
+10. **Log with tokenized macros, not printf** — use `LOG_INFO()` etc. for machine-readable output. `printf()` goes to RTT Channel 0 (text) and is acceptable for boot messages only.
+11. **Test on real hardware via HIL** — the codebase is designed for hardware-in-the-loop validation via the `tools/hil/` scripts. Always flash and verify behavior on the actual Pico W after changes.
