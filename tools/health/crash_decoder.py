@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -225,7 +226,11 @@ def main():
         try:
             addr2line_path = find_arm_toolchain("arm-none-eabi-addr2line")
         except FileNotFoundError:
-            pass  # Fall through to bare name — resolve_address handles gracefully
+            # Docker-only builds may not have the ARM toolchain on the host.
+            # The generic binutils addr2line handles ARM ELFs just fine.
+            if shutil.which("addr2line"):
+                addr2line_path = "addr2line"
+            # else: fall through to bare name — resolve_address handles gracefully
 
     # Read crash JSON
     try:

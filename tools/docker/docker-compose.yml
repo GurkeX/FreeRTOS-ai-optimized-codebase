@@ -128,3 +128,4 @@ services:
       openocd -f tools/hil/openocd/pico-probe.cfg
               -f tools/hil/openocd/rtt.cfg
               -c "bindto 0.0.0.0"
+              -c "init; rtt start; rtt server start 9090 0; rtt server start 9091 1; rtt server start 9092 2"

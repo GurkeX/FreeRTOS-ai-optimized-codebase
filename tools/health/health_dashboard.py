@@ -276,7 +276,7 @@ def process_telemetry(input_file, task_map, duration, summary_interval,
         for task in tasks:
             task_num = task.get("task_number", 0)
             cpu_pct = task.get("cpu_pct", 0)
-            stack_hwm = task.get("stack_hwm", 0)
+            stack_hwm = task.get("stack_hwm_words", task.get("stack_hwm", 0))
 
             if task_num not in task_stats_map:
                 name = task_map.get(task_num, task.get("name", f"task_{task_num}"))

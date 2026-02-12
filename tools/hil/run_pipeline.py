@@ -359,34 +359,39 @@ def stage_rtt_decode(project_root: str, duration_secs: int = 5,
                 "note": "token_database.csv not found — skipping RTT decode",
             }
 
-    # Run log_decoder.py with a duration limit
+    # Run log_decoder.py — it streams indefinitely, so we use the
+    # subprocess timeout to bound its runtime.  Note: log_decoder.py does
+    # NOT support --duration; the timeout is the only time limit.
     cmd = [
         sys.executable, decoder_script,
         "--port", "9091",
         "--csv", csv_path,
-        "--duration", str(duration_secs),
     ]
+
+    def _count_json_lines(text: str) -> int:
+        """Count valid JSONL lines in decoder output."""
+        count = 0
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if line:
+                try:
+                    json.loads(line)
+                    count += 1
+                except json.JSONDecodeError:
+                    pass
+        return count
 
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=duration_secs + 10,
+            timeout=duration_secs,
             cwd=project_root,
         )
         duration_ms = int((time.monotonic() - start) * 1000)
 
-        # Count decoded messages (each line of stdout should be a JSON object)
-        messages_decoded = 0
-        for line in result.stdout.strip().split("\n"):
-            line = line.strip()
-            if line:
-                try:
-                    json.loads(line)
-                    messages_decoded += 1
-                except json.JSONDecodeError:
-                    pass
+        messages_decoded = _count_json_lines(result.stdout)
 
         return {
             "status": "success" if messages_decoded > 0 else "warning",
@@ -394,11 +399,17 @@ def stage_rtt_decode(project_root: str, duration_secs: int = 5,
             "duration_ms": duration_ms,
             "note": None if messages_decoded > 0 else "No messages decoded (check RTT connection)",
         }
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        # Expected: the decoder runs until killed.  Collect partial output.
+        duration_ms = int((time.monotonic() - start) * 1000)
+        stdout = (e.stdout or "") if isinstance(e.stdout, str) else (e.stdout or b"").decode(errors="replace")
+        messages_decoded = _count_json_lines(stdout)
+
         return {
-            "status": "timeout",
-            "duration_ms": int((time.monotonic() - start) * 1000),
-            "error": f"RTT decode timed out after {duration_secs + 10}s",
+            "status": "success" if messages_decoded > 0 else "warning",
+            "messages_decoded": messages_decoded,
+            "duration_ms": duration_ms,
+            "note": None if messages_decoded > 0 else "No messages decoded within timeout",
         }
 
 
