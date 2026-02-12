@@ -50,6 +50,10 @@ if(BUILD_PRODUCTION)
     message(STATUS ">>> PRODUCTION BUILD — stripping logging, persistence, telemetry, health")
     add_compile_definitions(BUILD_PRODUCTION=1)
     add_compile_definitions(NDEBUG=1)
+    # NOTE: LTO (CMAKE_INTERPROCEDURAL_OPTIMIZATION) was tested but causes
+    # undefined reference errors for __wrap_printf/__wrap_puts due to Pico SDK's
+    # linker wrapping (-Wl,--wrap=printf). ARM GCC 10.3 LTO does not reliably
+    # handle wrapped symbols. Re-evaluate when upgrading toolchain.
 endif()
 
 # =========================================================================

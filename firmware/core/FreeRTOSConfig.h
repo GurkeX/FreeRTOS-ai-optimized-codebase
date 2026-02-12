@@ -33,7 +33,11 @@
 #define configTICK_RATE_HZ                           ((TickType_t)1000)
 #define configMAX_PRIORITIES                         8
 #define configMINIMAL_STACK_SIZE                     ((configSTACK_DEPTH_TYPE)256)  /* 256 words = 1KB */
+#ifdef BUILD_PRODUCTION
+#define configMAX_TASK_NAME_LEN                      2    /* Minimum required by FreeRTOS kernel; saves ~2 KB vs dev value of 16 */
+#else
 #define configMAX_TASK_NAME_LEN                      16
+#endif
 #define configUSE_16_BIT_TICKS                       0
 #define configIDLE_SHOULD_YIELD                      1
 #define configUSE_TASK_NOTIFICATIONS                 1
@@ -131,7 +135,11 @@
 #define configUSE_MUTEXES                            1
 #define configUSE_RECURSIVE_MUTEXES                  1
 #define configUSE_COUNTING_SEMAPHORES                1
+#ifdef BUILD_PRODUCTION
+#define configQUEUE_REGISTRY_SIZE                    0    /* Debug-only queue naming; disabled in production */
+#else
 #define configQUEUE_REGISTRY_SIZE                    8
+#endif
 
 /* =========================================================================
  * 10. RP2040 Port Include (MUST be last)

@@ -9,6 +9,7 @@
 services:
   build:
     image: ai-freertos-build
+    user: "${UID:-1000}:${GID:-1000}"
     build:
       context: .
       dockerfile: Dockerfile
@@ -18,6 +19,7 @@ services:
       # Bind mount for build output (visible on host)
       - ../../build:/workspace/build
     environment:
+      - HOME=/tmp
       - PICO_SDK_PATH=/workspace/lib/pico-sdk
       - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
     working_dir: /workspace
@@ -30,6 +32,7 @@ services:
 
   flash:
     image: ai-freertos-build
+    user: "${UID:-1000}:${GID:-1000}"
     build:
       context: .
       dockerfile: Dockerfile
@@ -44,6 +47,7 @@ services:
     device_cgroup_rules:
       - 'c 189:* rmw'
     environment:
+      - HOME=/tmp
       - PICO_SDK_PATH=/workspace/lib/pico-sdk
       - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
     working_dir: /workspace
@@ -55,6 +59,27 @@ services:
         openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
           -c 'adapter speed 5000' \
           -c 'program build/firmware/app/firmware.elf verify reset exit'
+      "
+
+  # Production build — stripped, optimized firmware
+  build-production:
+    image: ai-freertos-build
+    user: "${UID:-1000}:${GID:-1000}"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../../:/workspace
+      - ../../build-production:/workspace/build-production
+    environment:
+      - HOME=/tmp
+      - PICO_SDK_PATH=/workspace/lib/pico-sdk
+      - FREERTOS_KERNEL_PATH=/workspace/lib/FreeRTOS-Kernel
+    working_dir: /workspace
+    command: >
+      bash -c "
+        cmake -B build-production -DBUILD_PRODUCTION=ON -DCMAKE_BUILD_TYPE=MinSizeRel -G Ninja &&
+        ninja -C build-production
       "
 
   # Persistent OpenOCD server for ahi_tool.py, run_hw_test.py, and RTT

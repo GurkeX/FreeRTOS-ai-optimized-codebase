@@ -12,6 +12,8 @@ Build a lean, deployment-ready UF2 binary by activating the `BUILD_PRODUCTION` C
 
 Produce a minimal `firmware.uf2` with all observability stripped, compiler optimizations enabled (`-Os -DNDEBUG`), and binary size reported — then clean up so the workspace returns to normal development state.
 
+> **Note:** LTO (`CMAKE_INTERPROCEDURAL_OPTIMIZATION`) was tested but causes undefined reference errors for `__wrap_printf/__wrap_puts` due to Pico SDK's linker wrapping and ARM GCC 10.3 incompatibility. It is not enabled.
+
 ## Input Required
 
 - **None required** — uses project defaults (Pico W board, 500ms blinky)
@@ -26,30 +28,44 @@ Produce a minimal `firmware.uf2` with all observability stripped, compiler optim
 **Goal:** Establish a reference point for size comparison.
 
 1. Check the existing dev build artifact exists:
-   ```
+   ```bash
    ls -la build/firmware/app/firmware.uf2
    ```
-2. Record the dev UF2 size in bytes. If it doesn't exist, note "no baseline available".
+2. If available, record the dev UF2 size (expected: ~723 KB). If it doesn't exist, note "no baseline available".
 
-### Phase 2: Configure Production Build
+### Phase 2: Build Production Firmware
 
 **Goal:** Create a separate build directory with all observability stripped.
 
-Run CMake with the production flag enabled:
+#### Option A: Docker (Recommended — hermetic, no host toolchain needed)
+
+```bash
+docker compose -f tools/docker/docker-compose.yml run --rm build-production
+```
+
+This runs cmake configure + ninja compile inside the Docker container with `BUILD_PRODUCTION=ON` and `MinSizeRel` already set. Output lands in `build-production/`.
+
+#### Option B: Native Toolchain
 
 ```bash
 cmake -B build-production \
       -DBUILD_PRODUCTION=ON \
       -DCMAKE_BUILD_TYPE=MinSizeRel \
       -G Ninja
+
+ninja -C build-production
 ```
+
+#### Verification
 
 **Verify** the configure output contains:
 ```
 >>> PRODUCTION BUILD — stripping logging, persistence, telemetry, health
 ```
 
-If this message is **not** present, the `BUILD_PRODUCTION` option was not picked up — stop and investigate.
+If this message is **not** present, the `BUILD_PRODUCTION` option was not picked up — delete `build-production/` and re-run.
+
+The build should complete with **zero** linker errors. If unresolved symbols appear for `ai_log_*`, `fs_manager_*`, `telemetry_*`, `crash_*`, or `watchdog_manager_*`, the preprocessor guards are not working — stop and investigate.
 
 #### What BUILD_PRODUCTION=ON does
 
@@ -57,59 +73,58 @@ The flag is already wired throughout the codebase (no source edits needed):
 
 | Layer | Effect |
 |-------|--------|
-| `CMakeLists.txt` (root) | Defines `BUILD_PRODUCTION=1` and `NDEBUG=1` as compile definitions |
+| `CMakeLists.txt` (root) | Defines `BUILD_PRODUCTION=1`, `NDEBUG=1` |
 | `firmware/CMakeLists.txt` | Skips `add_subdirectory` for logging, persistence, telemetry, health |
 | `firmware/app/CMakeLists.txt` | Omits BB component libraries from linking, disables RTT stdio |
 | `firmware/app/main.c` | `#ifdef` guards skip BB includes, init calls, and observability in task loops |
-| `firmware/core/FreeRTOSConfig.h` | Disables trace facility, runtime stats, event groups; reduces heap to 64KB |
+| `firmware/core/FreeRTOSConfig.h` | Disables trace/runtime stats, reduces heap (200→64 KB), shrinks task names (16→2), disables queue registry |
 
-### Phase 3: Compile
+### Phase 3: Validate Production Binary
+
+**Goal:** Confirm observability code was fully stripped.
+
+#### 3a. Symbol Verification
 
 ```bash
-ninja -C build-production
+# These must all return NO matches (exit code 1):
+! arm-none-eabi-nm build-production/firmware/app/firmware.elf | grep -q "ai_log_"
+! arm-none-eabi-nm build-production/firmware/app/firmware.elf | grep -q "telemetry_"
+! arm-none-eabi-nm build-production/firmware/app/firmware.elf | grep -q "fs_manager_"
+! arm-none-eabi-nm build-production/firmware/app/firmware.elf | grep -q "watchdog_manager_"
 ```
 
-The build should complete with **zero warnings** related to missing symbols. If any unresolved symbol errors appear referencing `ai_log_*`, `fs_manager_*`, `telemetry_*`, `crash_*`, or `watchdog_manager_*`, the preprocessor guards are not working correctly — stop and investigate.
+If any of those symbols are found, an observability component leaked into the production binary — stop and investigate.
 
-### Phase 4: Report Results
+#### 3b. Size Report
 
-1. **Locate the artifacts:**
-   ```
-   build-production/firmware/app/firmware.uf2   # Drag-and-drop image
-   build-production/firmware/app/firmware.elf   # SWD flash image
-   ```
+```bash
+ls -la build-production/firmware/app/firmware.uf2
+arm-none-eabi-size build-production/firmware/app/firmware.elf
+```
 
-2. **Report binary sizes** and compare with dev baseline:
-   ```bash
-   ls -la build-production/firmware/app/firmware.uf2
-   ls -la build-production/firmware/app/firmware.elf
-   ```
+Present a comparison table:
 
-3. **Report section sizes** (text/data/bss breakdown):
-   ```bash
-   arm-none-eabi-size build-production/firmware/app/firmware.elf
-   ```
+```
+| Metric           | Dev Build | Production Build | Reduction |
+|------------------|-----------|------------------|-----------|
+| UF2 size         | ~723 KB   | ~522 KB          | ~28%      |
+| .text (code)     | ~374 KB   | ~271 KB          | ~28%      |
+| .bss (zero-init) | ~221 KB   | ~77 KB           | ~65%      |
+```
 
-4. Present a summary table:
-   ```
-   | Metric           | Dev Build | Production Build | Reduction |
-   |------------------|-----------|------------------|-----------|
-   | UF2 size         | XXX KB    | XXX KB           | XX%       |
-   | .text (code)     | XXX B     | XXX B            | XX%       |
-   | .data (init)     | XXX B     | XXX B            | XX%       |
-   | .bss (zero-init) | XXX B     | XXX B            | XX%       |
-   ```
+These are baseline expectations from v0.3.0 testing.
 
-   Expected reduction: **60–70%** (e.g., ~120KB → ~45KB UF2).
-
-### Phase 5: Clean Up
+### Phase 4: Clean Up
 
 **Goal:** Return the workspace to normal development state.
 
-Remove the production build directory:
-
 ```bash
 rm -rf build-production
+```
+
+If the build was done via Docker and permission errors occur:
+```bash
+docker compose -f tools/docker/docker-compose.yml run --rm build-production bash -c "rm -rf build-production"
 ```
 
 No source files were modified — the dev build in `build/` is completely unaffected. Development can continue immediately.
@@ -124,21 +139,25 @@ No source files were modified — the dev build in `build/` is completely unaffe
 | FreeRTOS-Kernel, pico-sdk | **KEPT** | Core RTOS and SDK |
 | `pico_cyw43_arch_none` | **KEPT** | Pico W onboard LED driver |
 | UART stdio | **KEPT** | Minimal boot diagnostics |
-| `firmware/components/logging/` (BB2) | **STRIPPED** | Dev-only tokenized RTT logging |
-| `firmware/components/persistence/` (BB4) | **STRIPPED** | Dev-only config storage (LittleFS + cJSON) |
-| `firmware/components/telemetry/` (BB4) | **STRIPPED** | Dev-only RTT vitals stream |
-| `firmware/components/health/` (BB5) | **STRIPPED** | Dev-only crash handler + cooperative watchdog |
-| RTT stdio | **STRIPPED** | No RTT channels in production |
-| Runtime stats / trace facility | **STRIPPED** | FreeRTOS observability macros disabled |
-| Event groups | **STRIPPED** | Only used by cooperative watchdog |
+| Stack overflow detection | **KEPT** | Runtime safety net (~500 B); graceful `watchdog_reboot()` on overflow |
+| Malloc failed hook | **KEPT** | Runtime safety net; graceful `watchdog_reboot()` on OOM |
+| Event Groups | **KEPT** | **Required by FreeRTOS SMP port** for RP2040 dual-core spinlock sync (`port.c:1044-1162`) |
+| `firmware/components/logging/` (BB2) | **STRIPPED** | Dev-only tokenized RTT logging (~25 KB) |
+| `firmware/components/persistence/` (BB4) | **STRIPPED** | Dev-only config storage — LittleFS + cJSON (~35 KB) |
+| `firmware/components/telemetry/` (BB4) | **STRIPPED** | Dev-only RTT vitals stream (~15 KB) |
+| `firmware/components/health/` (BB5) | **STRIPPED** | Dev-only crash handler + cooperative watchdog (~10 KB) |
+| RTT stdio + buffers | **STRIPPED** | No RTT channels in production (~8 KB) |
+| Runtime stats / trace facility | **STRIPPED** | FreeRTOS observability macros (~3 KB) |
+| Task name strings | **STRIPPED** | `configMAX_TASK_NAME_LEN = 2` in production (minimum required by kernel; ~2 KB saved vs dev value of 16) |
+| Queue registry | **STRIPPED** | Debug-only queue naming disabled (~500 B) |
 
 ## Production Firmware Behavior
 
-- Blinky task toggles LED at hardcoded 500ms (no persistent config lookup)
-- FreeRTOS hooks (`MallocFailed`, `StackOverflow`) do a simple `watchdog_reboot()` without crash diagnostics
-- Heap reduced from 200KB to 64KB
-- No RTT channels active — UART is the only output
-- Static allocation callbacks remain (required by FreeRTOS kernel)
+- Blinky task toggles LED at hardcoded 500ms (`BLINKY_DELAY_MS`, no persistent config lookup)
+- FreeRTOS hooks (`MallocFailed`, `StackOverflow`) do a simple `watchdog_reboot(0, 0, 0)` without crash diagnostics
+- Heap reduced from 200 KB to 64 KB (sufficient for blinky + FreeRTOS internals)
+- No RTT channels active — UART is the only stdio output
+- Static allocation callbacks remain (required by FreeRTOS kernel for idle/timer tasks)
 
 ## Troubleshooting
 
@@ -146,5 +165,8 @@ No source files were modified — the dev build in `build/` is completely unaffe
 |---------|-------|-----|
 | `>>> PRODUCTION BUILD` message missing | CMake cache stale | Delete `build-production/` and re-run cmake |
 | Linker errors for `ai_log_*` symbols | Component still being linked | Verify `firmware/app/CMakeLists.txt` has `if(NOT BUILD_PRODUCTION)` guards |
+| Linker errors for `xEventGroup*` | `configUSE_EVENT_GROUPS` was set to 0 | **Must be 1** — SMP port requires Event Groups; check `FreeRTOSConfig.h` Section 8 |
 | UF2 size same as dev | Define not propagating | Check root `CMakeLists.txt` has `add_compile_definitions(BUILD_PRODUCTION=1)` |
 | Build succeeds but binary is huge | Wrong build type | Ensure `-DCMAKE_BUILD_TYPE=MinSizeRel` was passed |
+| `rm -rf build-production` permission denied | Docker built as root | Use Docker to clean: `docker compose run --rm build-production bash -c "rm -rf build-production"` |
+| LTO "multiple definition" errors | Weak symbol / linker wrapping conflict | LTO is not enabled by default; ARM GCC 10.3 + Pico SDK `--wrap` symbols are incompatible with LTO |

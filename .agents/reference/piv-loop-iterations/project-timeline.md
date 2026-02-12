@@ -110,9 +110,24 @@
 - Conditional component compilation: `if(NOT BUILD_PRODUCTION)` in firmware/CMakeLists.txt strips BB2/BB4/BB5 entirely
 - Conditional library linking in firmware/app/CMakeLists.txt — production links only core infrastructure (FreeRTOS, Pico SDK, HAL)
 - Preprocessor guards in main.c (#ifdef BUILD_PRODUCTION) for BB includes, observability calls, and init sequence — no file duplication
-- FreeRTOSConfig.h production optimization: observability macros disabled, heap reduced 200KB→64KB, event groups disabled
-- Compiler flags: `-Os -DNDEBUG` for production; size reduction typical 60-70% (e.g., 120KB→45KB UF2)
-- Production fallbacks: hardcoded 500ms blink delay, simple `watchdog_enable()`, immediate watchdog reboots with no diagnostics
+- FreeRTOSConfig.h production optimization: observability macros disabled, heap reduced 200KB→64KB
+- Compiler flags: `-Os -DNDEBUG` for production; ~28% UF2 reduction (723 KB → 522 KB), ~65% BSS reduction
+- Production fallbacks: hardcoded 500ms blink delay, simple `watchdog_reboot()` in hooks, no crash diagnostics
+- Discovered: Event Groups cannot be disabled (required by FreeRTOS SMP port for RP2040 spinlock sync)
 - Key files: `CMakeLists.txt`, `firmware/CMakeLists.txt`, `firmware/app/CMakeLists.txt`, `firmware/app/main.c`, `firmware/core/FreeRTOSConfig.h`
+
+---
+
+### PIV-010: Production Build Hardening
+
+**Implemented Features:**
+- FreeRTOSConfig.h micro-optimizations: `configMAX_TASK_NAME_LEN = 2` and `configQUEUE_REGISTRY_SIZE = 0` in production (~2 KB savings)
+- Link-Time Optimization (LTO) tested via `CMAKE_INTERPROCEDURAL_OPTIMIZATION` but incompatible with Pico SDK's `--wrap` linker symbols on ARM GCC 10.3; documented as future re-evaluation item
+- Docker user mapping: `user: "${UID:-1000}:${GID:-1000}"` prevents root-owned build artifacts
+- Docker `build-production` compose service: one-command production builds (`docker compose run --rm build-production`)
+- Production build prompt rewritten with accurate benchmarks (522 KB UF2), Docker workflow, symbol verification, Event Groups correctly documented as retained
+- Obsolete `output-production-version.prompt.md` (509 lines) deleted
+- Corrected PIV-009 timeline entry to reflect actual test results
+- Key files: `firmware/core/FreeRTOSConfig.h`, `CMakeLists.txt`, `tools/docker/docker-compose.yml`, `.github/prompts/codebase-workflows/build-production-uf2.prompt.md`, `.agents/reference/piv-loop-iterations/project-timeline.md`
 
 ---
