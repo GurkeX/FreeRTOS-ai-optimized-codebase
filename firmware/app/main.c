@@ -13,14 +13,18 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"  /* Pico W onboard LED is on CYW43 */
 
+#ifndef BUILD_PRODUCTION
 #include "ai_log.h"           /* BB2: Tokenized logging */
 #include "fs_manager.h"       /* BB4: Persistent configuration */
 #include "telemetry.h"        /* BB4: RTT telemetry vitals */
 #include "crash_handler.h"    /* BB5: Crash reporter */
 #include "watchdog_manager.h" /* BB5: Cooperative watchdog */
+#endif
 
-#include "hardware/watchdog.h"      /* BB5: Direct scratch access in hooks */
-#include "hardware/structs/sio.h"   /* BB5: sio_hw->cpuid in hooks */
+#include "hardware/watchdog.h"      /* watchdog_reboot() used in hooks (both profiles) */
+#ifndef BUILD_PRODUCTION
+#include "hardware/structs/sio.h"   /* BB5: sio_hw->cpuid in crash diagnostics */
+#endif
 
 // Pico W: The onboard LED is connected to the CYW43 WiFi chip,
 // NOT to a regular GPIO pin. Must use cyw43_arch_gpio_put().
@@ -34,8 +38,10 @@ static void blinky_task(void *params) {
     (void)params;
     bool led_state = false;
 
+#ifndef BUILD_PRODUCTION
     // BB5: Assign task number for crash identification
     vTaskSetTaskNumber(xTaskGetCurrentTaskHandle(), 1);
+#endif
 
     // Initialize CYW43 for LED access on Pico W
     if (cyw43_arch_init()) {
@@ -44,6 +50,15 @@ static void blinky_task(void *params) {
         return;
     }
 
+#ifdef BUILD_PRODUCTION
+    printf("[blinky] Task started on core %u\n", get_core_num());
+
+    for (;;) {
+        led_state = !led_state;
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_state);
+        vTaskDelay(pdMS_TO_TICKS(BLINKY_DELAY_MS));
+    }
+#else
     // BB4: Read blink delay from persistent config
     const app_config_t *cfg = fs_manager_get_config();
 
@@ -61,12 +76,17 @@ static void blinky_task(void *params) {
 
         vTaskDelay(pdMS_TO_TICKS(cfg->blink_delay_ms));
     }
+#endif
 }
 
 int main(void) {
     // Phase 1: System hardware initialization
     system_init();
 
+#ifdef BUILD_PRODUCTION
+    printf("=== AI-Optimized FreeRTOS v0.3.0 (PRODUCTION) ===\n");
+    printf("[main] Creating blinky task...\n");
+#else
     // Phase 1.5: Initialize tokenized logging subsystem (RTT Channel 1)
     ai_log_init();
 
@@ -91,6 +111,7 @@ int main(void) {
     // Send BUILD_ID handshake (first log message — required by arch spec)
     LOG_INFO("BUILD_ID: %x", AI_LOG_ARG_U(AI_LOG_BUILD_ID));
     printf("[main] Creating blinky task...\n");
+#endif
 
     // Phase 2: Create initial tasks
     xTaskCreate(
@@ -102,6 +123,7 @@ int main(void) {
         NULL
     );
 
+#ifndef BUILD_PRODUCTION
     // Phase 2.5: BB4 — Start telemetry supervisor task (500ms vitals)
     const app_config_t *cfg = fs_manager_get_config();
     if (!telemetry_start_supervisor(cfg->telemetry_interval_ms)) {
@@ -114,6 +136,7 @@ int main(void) {
 
     // Phase 2.8: BB5 — Start watchdog monitor task
     watchdog_manager_start();
+#endif
 
     // Phase 3: Start scheduler (never returns)
     // On RP2040 SMP, this also launches Core 1.

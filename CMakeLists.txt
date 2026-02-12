@@ -39,6 +39,20 @@ set(FREERTOS_CONFIG_FILE_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/firmware/core CACHE
 include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
 
 # =========================================================================
+# Production Build Option
+# =========================================================================
+# Pass -DBUILD_PRODUCTION=ON to cmake to strip all observability components
+# (logging, persistence, telemetry, health) for a lean production image.
+# Default: OFF (full development build with all components).
+option(BUILD_PRODUCTION "Strip all observability components for a lean production build" OFF)
+
+if(BUILD_PRODUCTION)
+    message(STATUS ">>> PRODUCTION BUILD — stripping logging, persistence, telemetry, health")
+    add_compile_definitions(BUILD_PRODUCTION=1)
+    add_compile_definitions(NDEBUG=1)
+endif()
+
+# =========================================================================
 # Build Helper Targets (portability, IntelliSense setup)
 # =========================================================================
 # These targets handle post-build steps like rewriting compile_commands.json

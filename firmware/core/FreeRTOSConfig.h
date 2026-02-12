@@ -117,13 +117,13 @@
 #define configTIMER_TASK_STACK_DEPTH                  (configMINIMAL_STACK_SIZE * 2)
 
 /* =========================================================================
- * 8. Event Groups (BB5: Cooperative Watchdog)
+ * 8. Event Groups (BB5: Cooperative Watchdog + FreeRTOS SMP Port Requirement)
  * ========================================================================= */
-#ifndef BUILD_PRODUCTION
+/* CRITICAL: Event Groups MUST remain enabled even in production builds.
+ * The FreeRTOS SMP port for RP2040 uses xEventGroupSetBits/WaitBits internally
+ * for spinlock synchronization between cores (see port.c:1064, 1119, 1155).
+ * Disabling this causes linker errors. */
 #define configUSE_EVENT_GROUPS                       1
-#else
-#define configUSE_EVENT_GROUPS                       0   /* Disabled in production */
-#endif
 
 /* =========================================================================
  * 9. Synchronization
