@@ -10,7 +10,7 @@ Build a lean, deployment-ready UF2 binary by activating the `BUILD_PRODUCTION` C
 
 ## Objective
 
-Produce a minimal `firmware.uf2` with all observability stripped, compiler optimizations enabled (`-Os -DNDEBUG`), and binary size reported — then clean up so the workspace returns to normal development state.
+Produce a minimal `firmware.uf2` with all observability stripped, compiler optimizations enabled (`-Os -DNDEBUG`), and binary size reported. The production build directory persists in the workspace for deployment and analysis.
 
 > **Note:** LTO (`CMAKE_INTERPROCEDURAL_OPTIMIZATION`) was tested but causes undefined reference errors for `__wrap_printf/__wrap_puts` due to Pico SDK's linker wrapping and ARM GCC 10.3 incompatibility. It is not enabled.
 
@@ -114,20 +114,7 @@ Present a comparison table:
 
 These are baseline expectations from v0.3.0 testing.
 
-### Phase 4: Clean Up
-
-**Goal:** Return the workspace to normal development state.
-
-```bash
-rm -rf build-production
-```
-
-If the build was done via Docker and permission errors occur:
-```bash
-docker compose -f tools/docker/docker-compose.yml run --rm build-production bash -c "rm -rf build-production"
-```
-
-No source files were modified — the dev build in `build/` is completely unaffected. Development can continue immediately.
+**Note:** As of v0.3.1, the redundant bind mount was removed from docker-compose.yml, ensuring user-owned directories without permission issues.
 
 ---
 
@@ -168,5 +155,5 @@ No source files were modified — the dev build in `build/` is completely unaffe
 | Linker errors for `xEventGroup*` | `configUSE_EVENT_GROUPS` was set to 0 | **Must be 1** — SMP port requires Event Groups; check `FreeRTOSConfig.h` Section 8 |
 | UF2 size same as dev | Define not propagating | Check root `CMakeLists.txt` has `add_compile_definitions(BUILD_PRODUCTION=1)` |
 | Build succeeds but binary is huge | Wrong build type | Ensure `-DCMAKE_BUILD_TYPE=MinSizeRel` was passed |
-| `rm -rf build-production` permission denied | Docker built as root | Use Docker to clean: `docker compose run --rm build-production bash -c "rm -rf build-production"` |
+| `arm-none-eabi-size` not found | Native toolchain incomplete | Use Docker: `docker compose -f tools/docker/docker-compose.yml run --rm size-report` |
 | LTO "multiple definition" errors | Weak symbol / linker wrapping conflict | LTO is not enabled by default; ARM GCC 10.3 + Pico SDK `--wrap` symbols are incompatible with LTO |
