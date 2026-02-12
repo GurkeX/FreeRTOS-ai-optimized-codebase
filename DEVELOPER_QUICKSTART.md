@@ -7,6 +7,7 @@ a Docker container** — no local ARM toolchain installation is needed.
 
 - **Docker** (with `docker compose` v2)
 - **Python 3** (for host-side HIL tools: flash, probe, decode)
+- **OpenOCD** (`sudo apt install openocd`) for SWD flashing and RTT capture
 - **VS Code** (recommended IDE)
 
 ## Build
@@ -115,7 +116,7 @@ Works out of the box after first Docker build + IntelliSense fix. No manual setu
 | Flash | `python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf` |
 | Monitor logs | `python3 tools/logging/log_decoder.py` |
 | Check probe | `python3 tools/hil/probe_check.py --json` |
-| Start OpenOCD | `docker compose -f tools/docker/docker-compose.yml up hil` |
+| Start OpenOCD | `pkill -f openocd; openocd -f tools/hil/openocd/pico-probe.cfg -f tools/hil/openocd/rtt.cfg -c "init; rtt start; rtt server start 9090 0; rtt server start 9091 1; rtt server start 9092 2"` |
 | Full pipeline | `python3 tools/hil/run_pipeline.py --json` |
 
 ## Environment Variables

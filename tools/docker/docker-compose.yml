@@ -100,7 +100,8 @@ services:
         arm-none-eabi-size build-production/firmware/app/firmware.elf 2>/dev/null || echo 'No production build found'
       "
 
-  # Persistent OpenOCD server for ahi_tool.py, run_hw_test.py, and RTT
+  # Alternative: Persistent OpenOCD server in Docker (requires USB passthrough)
+  # Primary method: Run OpenOCD directly on host (see copilot-instructions.md Section 4)
   hil:
     image: ai-freertos-build
     build:

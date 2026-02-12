@@ -91,7 +91,7 @@ freeRtos-ai-optimized-codebase/
 | CMake | 3.13+ | Build system generator |
 | GoogleTest | latest | Host-side unit testing framework |
 | Python | 3.10+ | Host-side tools and automation |
-| OpenOCD | RPi fork | SWD flashing and GDB server |
+| OpenOCD | system pkg | SWD flashing, GDB server, RTT (host-installed via `apt`) |
 | Docker | latest | Hermetic build environment |
 
 ---

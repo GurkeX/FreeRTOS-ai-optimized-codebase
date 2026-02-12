@@ -44,7 +44,7 @@ test/                  ← Dual-nature testing
 
 ### Docker Build (Primary Method)
 
-**All compilation happens inside the Docker container.** The host system is only used for transferring binaries to the Raspberry Pi Pico hardware via SWD/OpenOCD.
+**All compilation happens inside the Docker container.** The host system runs OpenOCD for SWD/debug and Python HIL tools.
 
 ```bash
 docker compose -f tools/docker/docker-compose.yml run --rm build
@@ -58,7 +58,7 @@ docker compose -f tools/docker/docker-compose.yml run --rm build
 - Docker container has the complete Pico SDK toolchain (v2.2.0), CMake, Ninja, and ARM GCC
 - Hermetic environment ensures reproducible builds across different host systems
 - No local ARM toolchain is used — all compilation happens inside Docker
-- Host only needs: Python 3, Docker, and OpenOCD for hardware interaction
+- Host needs: Python 3, Docker, and **OpenOCD** (`sudo apt install openocd`)
 
 ### CMake Structure
 
@@ -110,13 +110,19 @@ python3 tools/hil/reset.py --with-rtt --json      # Reset + restart RTT channels
 
 ~6s faster than a full reflash.
 
-### Start Persistent OpenOCD Server
+### Start Persistent OpenOCD Server (Host)
 
-Required for `ahi_tool.py`, `run_hw_test.py`, and live RTT capture:
+Required for `ahi_tool.py`, `run_hw_test.py`, and live RTT capture.
+Run OpenOCD directly on the host — it needs USB access to the debug probe:
 
 ```bash
-docker compose -f tools/docker/docker-compose.yml up hil
+pkill -f openocd 2>/dev/null; sleep 0.5
+openocd -f tools/hil/openocd/pico-probe.cfg \
+        -f tools/hil/openocd/rtt.cfg \
+        -c "init; rtt start; rtt server start 9090 0; rtt server start 9091 1; rtt server start 9092 2"
 ```
+
+> **Alternative (Docker):** `docker compose -f tools/docker/docker-compose.yml up hil` — requires USB passthrough via cgroup rules, useful for CI environments.
 
 ### Port Map (When OpenOCD Is Running)
 
@@ -343,16 +349,15 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tre
 
 ## 11. AI Agent Instructions
 
-1. **ALWAYS compile inside Docker container** — use `docker compose -f tools/docker/docker-compose.yml run --rm build` for ALL code compilation. No local toolchain exists — Docker is the only supported build method. The host system is ONLY for:
-   - Flashing binaries to hardware via OpenOCD/SWD (`tools/hil/flash.py`)
-   - Running Python HIL tools (`probe_check.py`, `reset.py`, `ahi_tool.py`, etc.)
-   - Capturing RTT logs/telemetry via TCP ports (9090-9092)
-   - Decoding logs, telemetry, and crashes with Python scripts
+1. **ALWAYS compile inside Docker container** — use `docker compose -f tools/docker/docker-compose.yml run --rm build` for ALL code compilation. No local ARM toolchain exists — Docker is the only supported build method. The host system runs:
+   - **OpenOCD** (system-installed via `sudo apt install openocd`) for SWD flashing, GDB, and RTT
+   - **Python HIL tools** (`flash.py`, `probe_check.py`, `reset.py`, `ahi_tool.py`, etc.)
+   - **RTT capture/decode** via TCP ports (9090-9092) served by host OpenOCD
 2. **All HIL tools output structured JSON** — always pass `--json` and parse the JSON output for status/error determination. Do not regex human-readable text.
 3. **Always probe before flash** — run `probe_check.py --json` or use `--preflight` before flashing. Never assume hardware is connected.
 4. **Build before flash** — ensure the ELF is current. Use `--check-age` flag to detect stale builds (>120s). Remember: builds happen in Docker, artifacts appear in `./build/` via bind mount.
 5. **Wait for boot** — after flashing, first boot with LittleFS takes 5–7s. Use `wait_for_rtt_ready()` or adequate delays before capturing RTT.
-6. **Kill stale OpenOCD** — before starting a new OpenOCD instance, always `pkill openocd`. Only one instance can own the SWD interface.
+6. **Kill stale OpenOCD** — before starting a new OpenOCD instance, always `pkill -f openocd`. Only one instance can own the SWD interface. OpenOCD runs on the host (not Docker) for direct USB probe access.
 7. **Do NOT edit files under `lib/`** — these are git submodules (pico-sdk, FreeRTOS-Kernel, littlefs, cJSON). Treat as read-only.
 8. **Respect the boot init order** — see Section 8. Adding new subsystems means inserting at the correct phase in `main.c`.
 9. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
