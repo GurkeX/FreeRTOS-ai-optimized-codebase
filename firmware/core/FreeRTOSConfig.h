@@ -44,7 +44,11 @@
  * ========================================================================= */
 #define configSUPPORT_STATIC_ALLOCATION              1
 #define configSUPPORT_DYNAMIC_ALLOCATION             1
-#define configTOTAL_HEAP_SIZE                         (200 * 1024)  /* 200KB of 264KB SRAM */
+#ifdef BUILD_PRODUCTION
+#define configTOTAL_HEAP_SIZE                         (64 * 1024)   /* 64KB of 264KB SRAM (production) */
+#else
+#define configTOTAL_HEAP_SIZE                         (200 * 1024)  /* 200KB of 264KB SRAM (development) */
+#endif
 #define configAPPLICATION_ALLOCATED_HEAP              0
 #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP     0
 
@@ -68,10 +72,17 @@
 /* =========================================================================
  * 5. BB5 Observability Macros (ALL from architecture doc)
  * ========================================================================= */
+#ifndef BUILD_PRODUCTION
 #define configUSE_TRACE_FACILITY                     1   /* Enables uxTaskGetSystemState() */
 #define configGENERATE_RUN_TIME_STATS                1   /* Per-task CPU time counters */
 #define configUSE_STATS_FORMATTING_FUNCTIONS         1   /* vTaskGetRunTimeStats() (debug) */
 #define configRECORD_STACK_HIGH_ADDRESS              1   /* Stack start address in TCB */
+#else
+#define configUSE_TRACE_FACILITY                     0   /* Disabled in production */
+#define configGENERATE_RUN_TIME_STATS                0   /* Disabled in production */
+#define configUSE_STATS_FORMATTING_FUNCTIONS         0   /* Disabled in production */
+#define configRECORD_STACK_HIGH_ADDRESS              0   /* Disabled in production */
+#endif
 
 /* Runtime stats timer — RP2040's 1MHz timer is initialized by SDK, no-op here.
  * Cannot use time_us_32() directly here due to circular include dependency:
@@ -108,7 +119,11 @@
 /* =========================================================================
  * 8. Event Groups (BB5: Cooperative Watchdog)
  * ========================================================================= */
+#ifndef BUILD_PRODUCTION
 #define configUSE_EVENT_GROUPS                       1
+#else
+#define configUSE_EVENT_GROUPS                       0   /* Disabled in production */
+#endif
 
 /* =========================================================================
  * 9. Synchronization

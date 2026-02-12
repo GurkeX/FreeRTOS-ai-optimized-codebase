@@ -102,3 +102,17 @@
 - Key files: `tools/hil/openocd_utils.py`, `tools/hil/quick_test.sh` (new), `tools/hil/crash_test.sh` (new), `docs/troubleshooting.md` (new)
 
 ---
+
+### PIV-009: Production Build Workflow
+
+**Implemented Features:**
+- `BUILD_PRODUCTION` CMake option (default OFF) enabling single-codebase dual-profile builds
+- Conditional component compilation: `if(NOT BUILD_PRODUCTION)` in firmware/CMakeLists.txt strips BB2/BB4/BB5 entirely
+- Conditional library linking in firmware/app/CMakeLists.txt — production links only core infrastructure (FreeRTOS, Pico SDK, HAL)
+- Preprocessor guards in main.c (#ifdef BUILD_PRODUCTION) for BB includes, observability calls, and init sequence — no file duplication
+- FreeRTOSConfig.h production optimization: observability macros disabled, heap reduced 200KB→64KB, event groups disabled
+- Compiler flags: `-Os -DNDEBUG` for production; size reduction typical 60-70% (e.g., 120KB→45KB UF2)
+- Production fallbacks: hardcoded 500ms blink delay, simple `watchdog_enable()`, immediate watchdog reboots with no diagnostics
+- Key files: `CMakeLists.txt`, `firmware/CMakeLists.txt`, `firmware/app/CMakeLists.txt`, `firmware/app/main.c`, `firmware/core/FreeRTOSConfig.h`
+
+---

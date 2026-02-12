@@ -129,32 +129,37 @@ int main(void) {
 }
 
 // FreeRTOS hook: called when malloc fails
-// BB5: Write structured diagnostic data to scratch registers and reboot
 void vApplicationMallocFailedHook(void) {
+#ifdef BUILD_PRODUCTION
+    watchdog_reboot(0, 0, 0);
+#else
+    // BB5: Write structured diagnostic data to scratch registers and reboot
     uint32_t core_id = sio_hw->cpuid;
     watchdog_hw->scratch[0] = 0xDEADBAD0u;  /* "dead bad alloc" magic */
     watchdog_hw->scratch[1] = (uint32_t)xPortGetFreeHeapSize();
     watchdog_hw->scratch[2] = 0;
     watchdog_hw->scratch[3] = core_id << 12;
-
     watchdog_reboot(0, 0, 0);
+#endif
     while (1) { __asm volatile("" ::: "memory"); }
 }
 
 // FreeRTOS hook: called on stack overflow (method 2)
-// BB5: Write structured crash data to scratch registers and reboot
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void)pcTaskName;
-    /* Write crash-like data to scratch registers */
+#ifdef BUILD_PRODUCTION
+    (void)xTask;
+    watchdog_reboot(0, 0, 0);
+#else
+    // BB5: Write structured crash data to scratch registers and reboot
     uint32_t task_num = (uint32_t)uxTaskGetTaskNumber(xTask);
     uint32_t core_id = sio_hw->cpuid;
-
     watchdog_hw->scratch[0] = 0xDEAD57ACu;  /* "dead stack" magic */
-    watchdog_hw->scratch[1] = 0;             /* No PC available */
-    watchdog_hw->scratch[2] = 0;             /* No LR available */
+    watchdog_hw->scratch[1] = 0;
+    watchdog_hw->scratch[2] = 0;
     watchdog_hw->scratch[3] = ((core_id & 0xFu) << 12) | (task_num & 0xFFFu);
-
     watchdog_reboot(0, 0, 0);
+#endif
     while (1) { __asm volatile("" ::: "memory"); }
 }
 
