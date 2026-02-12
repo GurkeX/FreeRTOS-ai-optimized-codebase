@@ -122,7 +122,7 @@ volumes:
 
 ---
 
-## Secondary Issue: Native Toolchain Detection Failed
+## Secondary Issue: Native Toolchain Detection Failed (Host Debug Tools)
 
 ### Observation
 
@@ -188,7 +188,7 @@ docker run --rm -v "$(pwd)":/workspace -w /workspace ai-freertos-build \
 
 3. **[P2] Update prompt troubleshooting** — Add "Device or resource busy" error to troubleshooting table with one-off Docker fix command. **ETA: 2 minutes.**
 
-4. **[P3] Test on clean system** — Verify workflow on machine without `~/.pico-sdk/` to ensure Docker-only path works end-to-end. **ETA: 15 minutes.**
+4. **[P3] Test on clean system** — Verify workflow on machine without `~/.pico-sdk/` to ensure Docker-only build path works end-to-end. **ETA: 15 minutes.**
 
 5. **[P4] Add CI automation** — Create GitHub Actions workflow that runs production build + size comparison nightly. **ETA: 30 minutes.**
 

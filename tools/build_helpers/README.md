@@ -21,7 +21,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/tools/build_helpers/CMakeLists.txt)
 This automatically runs [`fix_compile_commands.cmake`](cmake/fix_compile_commands.cmake)
 after the build, rewriting `/workspace/` → the actual workspace path.
 
-**Works:** Docker builds, native builds, any environment  
+**Works:** Docker builds, CI environments  
 **User action required:** None (automatic)
 
 ### 2. **Manual Post-Build Script**
@@ -57,8 +57,8 @@ The `docker-compose.yml` mounts the workspace at `/workspace/` inside the contai
 After the container exits, the post-build script (CMake or Python) rewrites paths:
 
 ```
-Docker build               Native or CI
-   ↓                            ↓
+Docker build
+   ↓
 cmake (generates with /workspace/)
    ↓
 ninja build
@@ -69,10 +69,6 @@ compile_commands.json now has real absolute paths (or env vars)
    ↓
 IntelliSense ✓
 ```
-
-### With Native Build
-
-No `/workspace/` prefix is generated, so the helper scripts are no-ops.
 
 ## VS Code Integration
 
@@ -90,10 +86,9 @@ The build system reads these from the host shell:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PICO_SDK_PATH` | `${workspaceFolder}/lib/pico-sdk` | Pico SDK location (set in .vscode/settings.json) |
-| `PICO_TOOLCHAIN_PATH` | `~/.pico-sdk/toolchain/14_2_Rel1` | ARM GCC toolchain |
 | `CMAKE_EXPORT_COMPILE_COMMANDS` | `ON` | Auto-generate compile_commands.json |
 
-These are respected in both Docker and native builds.
+These are used by the Docker build environment.
 
 ## Testing
 

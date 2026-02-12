@@ -57,22 +57,8 @@ docker compose -f tools/docker/docker-compose.yml run --rm build
 **Key points:**
 - Docker container has the complete Pico SDK toolchain (v2.2.0), CMake, Ninja, and ARM GCC
 - Hermetic environment ensures reproducible builds across different host systems
-- No local toolchain installation required on the host
+- No local ARM toolchain is used — all compilation happens inside Docker
 - Host only needs: Python 3, Docker, and OpenOCD for hardware interaction
-
-### Local Build (Optional Alternative)
-
-If a local toolchain is installed via `~/.pico-sdk/`, you can build natively:
-
-```bash
-# Configure (only needed once or after CMakeLists.txt changes)
-cd build && cmake .. -G Ninja
-
-# Compile
-~/.pico-sdk/ninja/v1.12.1/ninja -C build
-```
-
-**Note:** Local builds are NOT the default workflow. The project is designed for Docker-based compilation.
 
 ### CMake Structure
 
@@ -129,14 +115,7 @@ python3 tools/hil/reset.py --with-rtt --json      # Reset + restart RTT channels
 Required for `ahi_tool.py`, `run_hw_test.py`, and live RTT capture:
 
 ```bash
-# Option A: Docker (exposes all ports)
 docker compose -f tools/docker/docker-compose.yml up hil
-
-# Option B: Native
-~/.pico-sdk/openocd/0.12.0+dev/openocd \
-    -s ~/.pico-sdk/openocd/0.12.0+dev/scripts \
-    -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
-    -c "adapter speed 5000"
 ```
 
 ### Port Map (When OpenOCD Is Running)
@@ -364,7 +343,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tre
 
 ## 11. AI Agent Instructions
 
-1. **ALWAYS compile inside Docker container** — use `docker compose -f tools/docker/docker-compose.yml run --rm build` for ALL code compilation. NEVER use local toolchain (`ninja`, `cmake`, VS Code tasks) unless explicitly requested. The host system is ONLY for:
+1. **ALWAYS compile inside Docker container** — use `docker compose -f tools/docker/docker-compose.yml run --rm build` for ALL code compilation. No local toolchain exists — Docker is the only supported build method. The host system is ONLY for:
    - Flashing binaries to hardware via OpenOCD/SWD (`tools/hil/flash.py`)
    - Running Python HIL tools (`probe_check.py`, `reset.py`, `ahi_tool.py`, etc.)
    - Capturing RTT logs/telemetry via TCP ports (9090-9092)

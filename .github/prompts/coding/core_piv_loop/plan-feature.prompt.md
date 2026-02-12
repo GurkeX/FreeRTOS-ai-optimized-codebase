@@ -16,6 +16,41 @@ Transform a feature request into a **comprehensive implementation plan** through
 
 ## Planning Process
 
+### Phase 0: PIV Iteration Management (Pre-Planning Cleanup)
+
+**Before starting the planning phases, use a specialized subagent to manage PIV iteration history:**
+
+**Subagent Mission**: Clean up PIV iteration folders and project timeline to maintain a focused workspace with recent context.
+
+**Cleanup Tasks for Subagent:**
+
+1. **Archive Old Iteration Folders**
+   - List all iteration folders in `.agents/reference/piv-loop-iterations/`
+   - Identify folders by numeric prefix (e.g., 011-, 012-), excluding:
+     - `piv-iteration-template/`
+     - `project-timeline.md` file
+   - Sort folders by numeric prefix ascending
+   - Keep only the **last 2 iterations**
+   - Move older iterations to `.agents/archive/piv-loop-iterations/` (create if not exists)
+   - Preserve folder structure and all contents during move
+
+2. **Archive Old Timeline Entries**
+   - Read `.agents/reference/piv-loop-iterations/project-timeline.md`
+   - Identify all PIV-XXX entries (e.g., ### PIV-001, ### PIV-002)
+   - Count entries from bottom to top (newest to oldest)
+   - Keep only the **last 5 PIV entries**
+   - Extract older entries (beyond the last 5)
+   - Append extracted entries to `.agents/archive/project-timeline-history.md`
+   - Add a timestamp separator when appending: `<!-- Archived on YYYY-MM-DD -->`
+   - Update the active project-timeline.md to contain only the last 5 entries
+
+**Subagent Deliverable**: Brief report confirming:
+- Number of folders archived and their names
+- Number of timeline entries archived
+- Current state: X active iteration folders, Y active timeline entries
+
+**Note**: If this is the first iteration or there are fewer than 3 folders/6 timeline entries, no action is needed. The subagent should report "No cleanup required."
+
 ### Phase 1: Feature Understanding
 
 **Deep Feature Analysis:**

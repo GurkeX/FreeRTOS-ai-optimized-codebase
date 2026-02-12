@@ -146,7 +146,7 @@ python3 tools/hil/run_pipeline.py --skip-build --skip-flash --rtt-duration 30 --
 
 1. **Is `arm-none-eabi-addr2line` in PATH?**
    - PIV-007+ auto-detects toolchain via `find_arm_toolchain()`
-   - Check manually:
+   - This is a **host-side debug utility** (not a build dependency) — check manually:
      ```bash
      ~/.pico-sdk/toolchain/*/bin/arm-none-eabi-addr2line --version
      ```

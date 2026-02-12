@@ -159,7 +159,7 @@ git submodule update --init --recursive
 3. Hot-plug: the `/dev/bus/usb` bind mount sees new devices without container restart.
 
 ### Stale build artifacts
-The `build/` directory is shared between host and container. If switching between native and Docker builds, clean first:
+The `build/` directory is shared between host and container. If you encounter stale artifacts, clean first:
 ```bash
 rm -rf build && docker compose -f tools/docker/docker-compose.yml run --rm build
 ```

@@ -99,14 +99,6 @@ docker compose -f tools/docker/docker-compose.yml run --rm build
 # On host: compile_commands.json is fixed ✓
 ```
 
-### Native Build Workflow
-
-```bash
-cd build && cmake .. -G Ninja && ninja
-# CMake post-build target runs automatically
-# compile_commands.json is fixed ✓
-```
-
 ### CI/CD Workflow
 
 ```yaml
@@ -137,7 +129,7 @@ Instead of hardcoding paths per machine, we use:
 - Works transparently after any build method
 - No user configuration required
 - `${CMAKE_SOURCE_DIR}` is always known to CMake
-- Both Docker and native builds define it identically
+- Both Docker and CI builds define it identically
 
 ### Why Not Detect in Docker?
 
@@ -188,23 +180,11 @@ docker compose -f tools/docker/docker-compose.yml run --rm build
 code .
 ```
 
-### Example 2: Native Build on Mac
-
-```bash
-# Build natively (Pico SDK at ~/.pico-sdk/)
-cd build
-cmake .. -G Ninja
-ninja
-# Post-build target auto-fixes paths
-
-# IntelliSense in CLion/VS Code works ✓
-```
-
-### Example 3: CI/CD with Manual Control
+### Example 2: CI/CD with Manual Control
 
 ```bash
 # GitHub Actions workflow
-- run: cd build && cmake .. -G Ninja && ninja
+- run: docker compose -f tools/docker/docker-compose.yml run --rm build
 - run: python3 tools/build_helpers/fix_compile_commands.py --json
 - run: |
     if [ $? -eq 0 ]; then

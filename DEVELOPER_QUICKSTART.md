@@ -1,33 +1,38 @@
-# Developer Quick Start — Multi-Platform Setup
+# Developer Quick Start — Docker Build Workflow
 
-This guide helps you get the project running on your machine, whether you use Docker,
-native compilation, WSL, or CI/CD.
+This guide helps you get the project building and running. **All compilation happens inside
+a Docker container** — no local ARM toolchain installation is needed.
 
 ## Prerequisites
 
-Choose **one** build method:
+- **Docker** (with `docker compose` v2)
+- **Python 3** (for host-side HIL tools: flash, probe, decode)
+- **VS Code** (recommended IDE)
 
-### Docker (No Toolchain Install)
+## Build
+
 ```bash
 docker compose -f tools/docker/docker-compose.yml run --rm build
 ```
 
-### Native (Requires Pico SDK)
+Build artifacts appear in `./build/` via bind mount:
+- `build/firmware/app/firmware.elf` — Main ELF for flashing/debugging
+- `build/firmware/app/firmware.uf2` — UF2 for drag-and-drop (BOOTSEL mode)
+
+### Production Build
+
 ```bash
-# Assumes ~/.pico-sdk/toolchain/14_2_Rel1/ is installed
-cd build && cmake .. -G Ninja && ninja
+docker compose -f tools/docker/docker-compose.yml run --rm build-production
 ```
 
-### Windows/WSL
-Same as native (use WSL2 with Ubuntu 22.04).
+Output in `./build-production/`.
 
 ## Post-Build Steps
 
 ### IntelliSense Setup (Required After Docker Build)
 
-**Docker builds require an additional step** — the CMake post-build path fix is a no-op inside
-Docker because `CMAKE_SOURCE_DIR=/workspace` (same as the Docker paths). The host-side Python
-script correctly replaces `/workspace/` with your real project path.
+Docker builds generate `compile_commands.json` with container paths (`/workspace/...`).
+The host-side Python script rewrites these to real absolute paths for IntelliSense.
 
 **After every Docker build, run from project root:**
 ```bash
@@ -35,8 +40,6 @@ python3 tools/build_helpers/fix_compile_commands.py
 ```
 
 This rewrites `build/compile_commands.json` to use real absolute paths, enabling IntelliSense.
-
-**Native builds (non-Docker)** — CMake auto-fixes paths during build. No manual step needed.
 
 ### Why This Is Needed
 
@@ -72,23 +75,13 @@ python3 tools/build_helpers/fix_compile_commands.py
 ### IntelliSense Still Shows Errors
 
 1. **Reload VS Code** — Ctrl+Shift+P → "Developer: Reload Window"
-2. **Delete .vscode/settings** — Some cached IntelliSense state persists:
+2. **Delete cached IntelliSense state:**
    ```bash
    rm -rf ~/.config/Code/User/workspaceStorage/  # Linux
    # macOS: ~/Library/Application\ Support/Code/User/workspaceStorage/
    # Windows: %APPDATA%\Code\User\workspaceStorage\
    ```
 3. **Check compile_commands.json** — Ensure paths are fixed (see "Verify IntelliSense" above)
-
-### Missing ARM Toolchain
-
-```bash
-# Install via Docker (easiest)
-docker compose -f tools/docker/docker-compose.yml run --rm build
-
-# Or install native (advanced)
-# See .pico-sdk/ folder structure and https://github.com/raspberrypi/pico-setup
-```
 
 ### Docker Build Fails
 
@@ -97,40 +90,32 @@ docker compose -f tools/docker/docker-compose.yml run --rm build
 docker compose -f tools/docker/docker-compose.yml build --no-cache
 ```
 
+### Missing ARM Toolchain Error
+
+The ARM toolchain is inside the Docker container. If you see toolchain errors:
+```bash
+# Ensure Docker image is built
+docker compose -f tools/docker/docker-compose.yml build
+```
+
 ## IDE Integration
 
 ### VS Code (Recommended)
 
-Works out of the box after first build. No manual setup needed.
-
-### CLion / IntelliJ IDEA
-
-1. **File → Settings → Languages & Frameworks → C/C++ → Toolchains**
-2. **Add → Custom Toolchain**
-3. **Set C Compiler:** `~/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc`
-4. **CMake:** `~/.pico-sdk/cmake/v3.31.5/bin/cmake`
-5. **Reload CMake Project** (Ctrl+T on macOS, or toolbar button)
-
-### Vim / Neovim
-
-Use **coc.nvim** or **nvim-lsp** with **clangd**:
-```bash
-# Install clangd
-sudo apt install clangd-14  # Linux
-brew install clangd         # macOS
-
-# clangd will auto-discover the .clangd config file
-```
+Works out of the box after first Docker build + IntelliSense fix. No manual setup needed.
 
 ## Useful Commands
 
 | Task | Command |
 |------|---------|
-| Build | `cd build && ninja` |
+| Build (dev) | `docker compose -f tools/docker/docker-compose.yml run --rm build` |
+| Build (production) | `docker compose -f tools/docker/docker-compose.yml run --rm build-production` |
+| Fix IntelliSense | `python3 tools/build_helpers/fix_compile_commands.py` |
 | Clean | `rm -rf build && mkdir build` |
 | Flash | `python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf` |
 | Monitor logs | `python3 tools/logging/log_decoder.py` |
 | Check probe | `python3 tools/hil/probe_check.py --json` |
+| Start OpenOCD | `docker compose -f tools/docker/docker-compose.yml up hil` |
 | Full pipeline | `python3 tools/hil/run_pipeline.py --json` |
 
 ## Environment Variables
@@ -139,9 +124,7 @@ These are set automatically by `.vscode/settings.json`:
 
 | Variable | Value | Used By |
 |----------|-------|---------|
-| `PICO_SDK_PATH` | `${workspaceFolder}/lib/pico-sdk` | CMake |
-| `PICO_TOOLCHAIN_PATH` | `~/.pico-sdk/toolchain/14_2_Rel1` | CMake |
-| `PATH` | Prepends toolchain, picotool, cmake, ninja | All |
+| `PICO_SDK_PATH` | `${workspaceFolder}/lib/pico-sdk` | Python HIL tools |
 
 ## Next Steps
 

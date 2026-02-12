@@ -154,6 +154,6 @@ LOG_INFO("My task running on core=%d", AI_LOG_ARG_U(get_core_num()));
 1. **Build and flash:**
 
 ```bash
-~/.pico-sdk/ninja/v1.12.1/ninja -C build
+docker compose -f tools/docker/docker-compose.yml run --rm build
 python3 tools/hil/flash.py --elf build/firmware/app/firmware.elf --json
 ```

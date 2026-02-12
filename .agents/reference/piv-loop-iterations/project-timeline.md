@@ -144,3 +144,15 @@
 - Key files: `.vscode/c_cpp_properties.json`, `DEVELOPER_QUICKSTART.md`, 8 files in `.github/prompts/`, piv-iteration-template structure
 
 ---
+
+### PIV-012: Docker-Only Build Workflow
+
+**Implemented Features:**
+- Consolidated build workflow to Docker-only: removed all local/native compilation references from docs, settings, and agent instructions
+- `.vscode/settings.json` stripped of `~/.pico-sdk/` toolchain paths; `cmakeAutoConfigure` set to `false`
+- `DEVELOPER_QUICKSTART.md` rewritten as Docker-only quickstart (removed CLion, Vim, WSL, native build sections)
+- Agent instructions tightened: "Docker is the only supported build method" with no local toolchain exception
+- HIL tool runtime discovery paths (`tools/hil/*.py`) explicitly preserved unchanged
+- Key files: `.vscode/settings.json`, `.github/copilot-instructions.md`, `DEVELOPER_QUICKSTART.md`, `tools/build_helpers/README.md`
+
+---

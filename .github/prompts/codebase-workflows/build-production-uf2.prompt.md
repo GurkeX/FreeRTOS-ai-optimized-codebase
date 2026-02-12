@@ -5,7 +5,7 @@
 Build a lean, deployment-ready UF2 binary by activating the `BUILD_PRODUCTION` CMake option. This strips **all observability components** (logging, persistence, telemetry, health) at compile time — no source file modifications needed.
 
 - **Domain:** Embedded systems, RP2040 (Pico W), FreeRTOS SMP, Pico SDK, CMake
-- **Prerequisites:** Working build toolchain (native or Docker), successful dev build as baseline
+- **Prerequisites:** Working Docker build environment, successful dev build as baseline
 - **Constraints:** The dev build (`build/`) must remain untouched. Production uses a **separate** build directory.
 
 ## Objective

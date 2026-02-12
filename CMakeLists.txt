@@ -60,7 +60,7 @@ endif()
 # Build Helper Targets (portability, IntelliSense setup)
 # =========================================================================
 # These targets handle post-build steps like rewriting compile_commands.json
-# paths to be portable across Docker and native builds.
+# paths to be portable across Docker builds and CI environments.
 include(${CMAKE_CURRENT_LIST_DIR}/tools/build_helpers/CMakeLists.txt)
 
 # Add firmware subdirectory

@@ -3,7 +3,7 @@
 # This file configures how clangd (Language Server Protocol) handles code completion,
 # diagnostics, and navigation for the AI-Optimized FreeRTOS project.
 #
-# It works transparently across different build environments (Docker, native, CI)
+# It works transparently across different build environments (Docker, CI)
 # by telling clangd to use compile_commands.json (which is auto-fixed after build).
 #
 # Reference: https://clang.llvm.org/extra/clangd/Configuration.html
