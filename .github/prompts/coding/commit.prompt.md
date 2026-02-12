@@ -1,6 +1,5 @@
 ---
 description: Create git commit with conventional message format
-argument-hint: [file1] [file2] ... (optional - commits all changes if not specified)
 ---
 
 # Commit: Create Git Commit
