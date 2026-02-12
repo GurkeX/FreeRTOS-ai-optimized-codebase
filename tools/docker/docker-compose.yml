@@ -70,7 +70,6 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ../../:/workspace
-      - ../../build-production:/workspace/build-production
     environment:
       - HOME=/tmp
       - PICO_SDK_PATH=/workspace/lib/pico-sdk
@@ -80,6 +79,25 @@ services:
       bash -c "
         cmake -B build-production -DBUILD_PRODUCTION=ON -DCMAKE_BUILD_TYPE=MinSizeRel -G Ninja &&
         ninja -C build-production
+      "
+
+  # Size comparison report for dev vs production builds
+  size-report:
+    image: ai-freertos-build
+    user: "${UID:-1000}:${GID:-1000}"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../../:/workspace
+    working_dir: /workspace
+    command: >
+      bash -c "
+        echo '=== DEV BUILD ===' &&
+        arm-none-eabi-size build/firmware/app/firmware.elf 2>/dev/null || echo 'No dev build found' &&
+        echo '' &&
+        echo '=== PRODUCTION BUILD ===' &&
+        arm-none-eabi-size build-production/firmware/app/firmware.elf 2>/dev/null || echo 'No production build found'
       "
 
   # Persistent OpenOCD server for ahi_tool.py, run_hw_test.py, and RTT
