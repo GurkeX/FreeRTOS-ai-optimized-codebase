@@ -110,6 +110,8 @@ python3 tools/hil/reset.py --with-rtt --json      # Reset + restart RTT channels
 
 ~6s faster than a full reflash.
 
+> **CRITICAL:** `reset.py` **terminates the OpenOCD session** during its operation. After calling `reset.py`, you **must restart OpenOCD** if you need RTT capture, register access, or GDB functionality. Use `--with-rtt` flag to automatically restart OpenOCD with RTT channels, or manually restart OpenOCD as shown in the next section.
+
 ### Start Persistent OpenOCD Server (Host)
 
 Required for `ahi_tool.py`, `run_hw_test.py`, and live RTT capture.
@@ -333,7 +335,7 @@ Runtime stats timer reads `0x40054028` (RP2040 TIMERAWL register, 1MHz, wraps at
 1. Check LED blinking (firmware running?)
 2. First boot with LittleFS takes 5–7s — use `wait_for_rtt_ready()`
 3. `telnet localhost 6666` → `rtt channels` → should show Terminal, Logger, Telemetry
-4. Restart OpenOCD after reflash (RTT control block address changes)
+4. Restart OpenOCD after reflash or reset.py (RTT control block address changes, and reset.py terminates OpenOCD)
 
 ### Crash with no data
 - Only **watchdog reboots** preserve scratch registers (power-on resets clear them)
@@ -343,7 +345,7 @@ Runtime stats timer reads `0x40054028` (RP2040 TIMERAWL register, 1MHz, wraps at
 - HW WDT pauses during SWD debug, but the cooperative watchdog (Event Groups) does NOT
 - Stepping in debugger → Event Group timeout fires → expected behavior
 
-See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tree.
+See [Troubleshooting Guide](../docs/codebase-specific/troubleshooting.md) for the full decision tree.
 
 ---
 
@@ -357,17 +359,29 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for the full decision tre
 3. **Always probe before flash** — run `probe_check.py --json` or use `--preflight` before flashing. Never assume hardware is connected.
 4. **Build before flash** — ensure the ELF is current. Use `--check-age` flag to detect stale builds (>120s). Remember: builds happen in Docker, artifacts appear in `./build/` via bind mount.
 5. **Wait for boot** — after flashing, first boot with LittleFS takes 5–7s. Use `wait_for_rtt_ready()` or adequate delays before capturing RTT.
-6. **Kill stale OpenOCD** — before starting a new OpenOCD instance, always `pkill -f openocd`. Only one instance can own the SWD interface. OpenOCD runs on the host (not Docker) for direct USB probe access.
-7. **Do NOT edit files under `lib/`** — these are git submodules (pico-sdk, FreeRTOS-Kernel, littlefs, cJSON). Treat as read-only.
-8. **Respect the boot init order** — see Section 8. Adding new subsystems means inserting at the correct phase in `main.c`.
-9. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
-10. **Log with tokenized macros, not printf** — use `LOG_INFO()` etc. for machine-readable output. `printf()` goes to RTT Channel 0 (text) and is acceptable for boot messages only.
-11. **Test on real hardware via HIL** — the codebase is designed for hardware-in-the-loop validation via the `tools/hil/` scripts. Always flash and verify behavior on the actual Pico W after changes.
-12. **Use `temp/` for temporary test files** — create test data (crash JSONs, telemetry samples) inside project's `temp/` directory for auto-approval. Example:
+6. **`reset.py` kills OpenOCD — always restart it afterward** — `reset.py` terminates the OpenOCD session during its operation. After calling `reset.py`, you **must restart OpenOCD** if you need RTT capture, register access (`ahi_tool.py`), or GDB functionality. Use `reset.py --with-rtt` to automatically restart OpenOCD with RTT channels, or manually restart with `pkill -f openocd; openocd -f ... &`. Only one OpenOCD instance can own the SWD interface at a time. OpenOCD runs on the host (not Docker) for direct USB probe access.
+7. **For HIL flash workflows, consult the Agent Quick Reference** — see [docs/workflows/AGENT_HIL_FLASH_GUIDE.md](../docs/workflows/AGENT_HIL_FLASH_GUIDE.md) for information-dense, chronological workflows covering build→flash→observe operations, OpenOCD lifecycle management, pre-built copy-paste commands, common failures, and timing budgets. Use these proven patterns instead of improvising.
+8. **Do NOT edit files under `lib/`** — these are git submodules (pico-sdk, FreeRTOS-Kernel, littlefs, cJSON). Treat as read-only.
+9. **Respect the boot init order** — see Section 8. Adding new subsystems means inserting at the correct phase in `main.c`.
+10. **New tasks must register with the watchdog** — define a `WDG_BIT_*`, register in `main()`, call `watchdog_manager_checkin()` in the task loop. Unregistered tasks won't cause issues but won't be monitored.
+11. **Log with tokenized macros, not printf** — use `LOG_INFO()` etc. for machine-readable output. `printf()` goes to RTT Channel 0 (text) and is acceptable for boot messages only.
+12. **Test on real hardware via HIL** — the codebase is designed for hardware-in-the-loop validation via the `tools/hil/` scripts. Always flash and verify behavior on the actual Pico W after changes.
+13. **Use `temp/` only for hardware communication artifacts** — the `temp/` directory (gitignored) is for ephemeral data captured from the RP2040 during HIL testing. This includes:
+    - RTT log captures (`--output temp/logs.jsonl`, `> temp/rtt_capture.txt`)
+    - Telemetry data files (`--output temp/telemetry/`)
+    - Crash JSON data (`temp/crash.json`)
+    - Raw stdio captures from the device (`> temp/stdio_output.txt`)
+
     ```bash
     mkdir -p temp
-    echo '{"magic":"0xDEADFA11",...}' > temp/test_crash.json
-    python3 tools/health/crash_decoder.py --json temp/test_crash.json --elf build/firmware/app/firmware.elf
-    rm -rf temp/
+    # Log decoder output:
+    python3 tools/logging/log_decoder.py --port 9091 --csv tools/logging/token_database.csv --output temp/logs.jsonl
+    # Telemetry capture:
+    python3 tools/telemetry/telemetry_manager.py --output temp/telemetry
+    # Crash test data:
+    python3 tools/health/crash_decoder.py --json temp/crash.json --elf build/firmware/app/firmware.elf
     ```
-    Never use `/tmp/` — files outside workspace require manual approval.
+
+    **Do NOT put other files in `temp/`** — source code, documentation, configuration, test reports, and any other project artifacts belong in their designated locations within the codebase (e.g., `firmware/`, `docs/`, `tools/`, etc.). Only raw hardware captures and throwaway debug data go in `temp/`.
+
+    **NEVER use `/tmp/`, `$TMPDIR`, or any system temp directory** — always use workspace-local paths. For hardware captures use `temp/`; for everything else, use the appropriate project directory.
